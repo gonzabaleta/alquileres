@@ -1,3 +1,12 @@
+# Ignorar datasets
+data/alquiler*
+
+# intellij
+.idea/
+
+# AI Assistants
+GEMINI.md
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
