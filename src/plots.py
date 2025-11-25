@@ -3,7 +3,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import math
-from typing import List
+from typing import List, Tuple
 
 
 def plot_boolean_impact(
@@ -77,7 +77,12 @@ def plot_correlation_heatmap(df: pd.DataFrame, numeric_cols: List[str] = None):
     plt.show()
 
 
-def plot_histograms(df: pd.DataFrame, cols: List[str], n_cols: int = 3):
+def plot_histograms(
+    df: pd.DataFrame, 
+    cols: List[str], 
+    n_cols: int = 3, 
+    clip_percentiles: Tuple[float, float] = None
+):
     """
     Generates a grid of histograms for specified columns in a DataFrame.
 
@@ -87,6 +92,8 @@ def plot_histograms(df: pd.DataFrame, cols: List[str], n_cols: int = 3):
         df: The input DataFrame.
         cols: A list of column names to plot.
         n_cols: The number of columns for the subplot grid.
+        clip_percentiles: Optional. A tuple (lower, upper) for clipping data.
+                          e.g., (0.05, 0.95) to exclude the bottom 5% and top 5%.
     """
     n_rows = math.ceil(len(cols) / n_cols)
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 6, n_rows * 5))
@@ -99,15 +106,25 @@ def plot_histograms(df: pd.DataFrame, cols: List[str], n_cols: int = 3):
             ax.set_title(f'Column "{col}" not found')
             ax.set_visible(False)
             continue
+            
+        data_to_plot = df[col].dropna()
+
+        title = f'Distribution of "{col}"'
+        
+        if clip_percentiles:
+            lower_quantile = data_to_plot.quantile(clip_percentiles[0])
+            upper_quantile = data_to_plot.quantile(clip_percentiles[1])
+            data_to_plot = data_to_plot.clip(lower=lower_quantile, upper=upper_quantile)
+            title += f'\n(Clipped at {clip_percentiles[0]*100:.0f}-{clip_percentiles[1]*100:.0f}th percentiles)'
 
         # Plot histogram using seaborn
-        sns.histplot(df[col], kde=True, ax=ax)
+        sns.histplot(data_to_plot, kde=True, ax=ax)
 
-        # Calculate and plot the mean line
-        mean_val = df[col].mean()
+        # Calculate and plot the mean line of the *clipped* data
+        mean_val = data_to_plot.mean()
         ax.axvline(mean_val, color='r', linestyle='--', linewidth=2, label=f'Mean: {mean_val:.2f}')
 
-        ax.set_title(f'Distribution of "{col}"')
+        ax.set_title(title)
         ax.set_xlabel(col)
         ax.set_ylabel("Frequency")
         ax.legend()
@@ -118,6 +135,7 @@ def plot_histograms(df: pd.DataFrame, cols: List[str], n_cols: int = 3):
 
     plt.tight_layout()
     plt.show()
+
 
 def plot_boxplots(df: pd.DataFrame, cols: List[str], n_cols: int = 3):
     """
