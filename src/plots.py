@@ -282,7 +282,13 @@ def plot_categorical_impact(df: pd.DataFrame, cat_cols: List[str], target_col: s
 
         grouped = df.groupby(col)[target_col].median()
         impact_pct = ((grouped - overall_median) / overall_median) * 100
-        impact_pct = impact_pct.sort_values(ascending=False)
+        
+        # --- Smart Sorting Logic ---
+        is_numeric_like = pd.to_numeric(impact_pct.index, errors='coerce').notna().all()
+        if is_numeric_like:
+            impact_pct = impact_pct.sort_index()
+        else:
+            impact_pct = impact_pct.sort_values(ascending=False)
         
         sns.barplot(x=impact_pct.index, y=impact_pct.values, ax=ax, palette="viridis", order=impact_pct.index)
         
