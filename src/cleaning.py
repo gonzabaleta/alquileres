@@ -15,11 +15,12 @@ class CleaningConfig(TypedDict):
     bool_cols: NotRequired[List[str]]
     amenities_to_combine: NotRequired[Dict[str, str]]
     age_col: NotRequired[str]
-    listing_month_col: NotRequired[str]
+    date_features: NotRequired[Dict[str, str]]
     negative_val_cols: NotRequired[List[str]]
-    surface_cols: NotRequired[List[str]]
-    room_cols: NotRequired[Dict[str, str]]
-    surface_consistency_cols: NotRequired[Dict[str, str]]
+    zero_surface_cols: NotRequired[List[str]]
+    zero_room_cols: NotRequired[List[str]]
+    room_inconsistency_cols: NotRequired[Dict[str, str]]
+    surface_inconsistency_cols: NotRequired[Dict[str, str]]
 
 
 def drop_columns(df: pd.DataFrame, cols: list) -> pd.DataFrame:
@@ -76,18 +77,26 @@ def convert_age_to_numeric(df: pd.DataFrame, col_name: str) -> pd.DataFrame:
     col_data = df[col_name].copy()
     a_estrenar_mask = col_data.str.lower() == "a estrenar"
     col_data.loc[a_estrenar_mask.fillna(False)] = "0"
+    # Use a raw string (r"...") for the regex pattern to avoid SyntaxWarning
     df[col_name] = pd.to_numeric(
-        col_data.str.extract("(\d+)", expand=False), errors="coerce"
+        col_data.str.extract(r"(\d+)", expand=False), errors="coerce"
     )
     return df
 
 
-def convert_listing_month_to_datetime(df: pd.DataFrame, col_name: str) -> pd.DataFrame:
-    if col_name not in df.columns:
-        print(f"Warning: Column '{col_name}' not found for datetime conversion.")
+def engineer_date_features(
+    df: pd.DataFrame, date_col: str, start_date_str: str
+) -> pd.DataFrame:
+    """Engineers new features from a date column and drops the original."""
+    if date_col not in df.columns:
+        print(f"Warning: Date column '{date_col}' not found for feature engineering.")
         return df
-    print(f"Converting column '{col_name}' to datetime...")
-    df[col_name] = pd.to_datetime(df[col_name], errors="coerce")
+    print(f"Engineering features from date column '{date_col}'...")
+    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+    start_date = pd.to_datetime(start_date_str)
+    df["meses_desde_comienzo"] = (df[date_col] - start_date).dt.days / 30.44
+    df["mes_listing"] = df[date_col].dt.month
+    df = df.drop(columns=[date_col])
     return df
 
 
@@ -112,6 +121,20 @@ def handle_zero_surface_values(df: pd.DataFrame, cols: list) -> pd.DataFrame:
     if not found_cols:
         return df
     print(f"Replacing 0-value surfaces with NaN in: {', '.join(found_cols)}")
+    for col in found_cols:
+        mask = df[col] == 0
+        if mask.any():
+            print(f"  - Found {mask.sum()} zero values in '{col}'.")
+            df.loc[mask, col] = np.nan
+    return df
+
+
+def handle_zero_room_values(df: pd.DataFrame, cols: list) -> pd.DataFrame:
+    """Replaces 0 values in room-related columns with NaN."""
+    found_cols = get_existing_columns(df, cols)
+    if not found_cols:
+        return df
+    print(f"Replacing 0-value rooms with NaN in: {', '.join(found_cols)}")
     for col in found_cols:
         mask = df[col] == 0
         if mask.any():
@@ -162,17 +185,15 @@ def handle_surface_inconsistencies(
 
 def clean_data(df: pd.DataFrame, config: CleaningConfig) -> pd.DataFrame:
     """
-    Applies a sequence of cleaning steps to the raw property data based on a configuration object.
+    Applies a sequence of cleaning and feature engineering steps to the raw property data.
     """
     print("--- Starting Data Cleaning Pipeline ---")
     df_clean = df.copy()
 
     if "cols_to_drop" in config:
         df_clean = drop_columns(df_clean, config["cols_to_drop"])
-
     if "bool_cols" in config:
         df_clean = unify_boolean_columns(df_clean, config["bool_cols"])
-
     if "amenities_to_combine" in config:
         amenities_config = config["amenities_to_combine"]
         df_clean = combine_amenities(
@@ -181,29 +202,26 @@ def clean_data(df: pd.DataFrame, config: CleaningConfig) -> pd.DataFrame:
             amenities_config["col2"],
             amenities_config["new_name"],
         )
-
     if "age_col" in config:
         df_clean = convert_age_to_numeric(df_clean, config["age_col"])
-
-    if "listing_month_col" in config:
-        df_clean = convert_listing_month_to_datetime(
-            df_clean, config["listing_month_col"]
+    if "date_features" in config:
+        date_config = config["date_features"]
+        df_clean = engineer_date_features(
+            df_clean, date_config["date_col"], date_config["start_date"]
         )
-
     if "negative_val_cols" in config:
         df_clean = remove_negative_values(df_clean, config["negative_val_cols"])
-
-    if "surface_cols" in config:
-        df_clean = handle_zero_surface_values(df_clean, config["surface_cols"])
-
-    if "room_cols" in config:
-        room_config = config["room_cols"]
+    if "zero_surface_cols" in config:
+        df_clean = handle_zero_surface_values(df_clean, config["zero_surface_cols"])
+    if "zero_room_cols" in config:
+        df_clean = handle_zero_room_values(df_clean, config["zero_room_cols"])
+    if "room_inconsistency_cols" in config:
+        room_config = config["room_inconsistency_cols"]
         df_clean = handle_room_inconsistencies(
             df_clean, room_config["total"], room_config["sub"]
         )
-
-    if "surface_consistency_cols" in config:
-        surface_config = config["surface_consistency_cols"]
+    if "surface_inconsistency_cols" in config:
+        surface_config = config["surface_inconsistency_cols"]
         df_clean = handle_surface_inconsistencies(
             df_clean, surface_config["total"], surface_config["constructed"]
         )

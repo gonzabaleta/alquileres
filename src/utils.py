@@ -2,6 +2,7 @@ import pandas as pd
 from typing import List
 
 DEV_SET_RAW_PATH = "data/raw/alquiler_AMBA_dev.csv"
+DEV_SET_CLEAN_PATH = "data/processed/dev_set_clean.csv"
 TEST_SET_RAW_PATH = "data/alquiler_AMBA_test.csv"
 TARGET = "precio_pesos_constantes"
 
