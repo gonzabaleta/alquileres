@@ -1,5 +1,5 @@
 # Ignorar datasets
-data/alquiler*
+data/*
 
 # intellij
 .idea/
