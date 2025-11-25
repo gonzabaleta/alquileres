@@ -176,7 +176,6 @@ def plot_geo_scatterplot(
 ):
     """
     Generates a scatter plot of geographical data, with points colored by another variable.
-    Optionally adds a basemap from contextily.
     """
     lon_col, lat_col = geo_cols
 
@@ -232,4 +231,69 @@ def plot_geo_scatterplot(
     if add_basemap:
         cx.add_basemap(ax, crs="EPSG:4326", source=cx.providers.OpenStreetMap.Mapnik)
 
+    plt.show()
+
+def plot_median_price_impact(df: pd.DataFrame, bool_cols: List[str], target_col: str):
+    """
+    Calculates and plots the percentage impact on median price for boolean features.
+    """
+    impacts = {}
+    overall_median = df[target_col].median()
+
+    for col in bool_cols:
+        if col not in df.columns:
+            print(f"Warning: Column '{col}' not found. Skipping.")
+            continue
+        median_true = df[df[col] == True][target_col].median()
+        if pd.isna(median_true):
+            impact = 0
+        else:
+            impact = ((median_true - overall_median) / overall_median) * 100
+        impacts[col] = impact
+
+    impact_df = pd.DataFrame.from_dict(impacts, orient='index', columns=['impact_pct'])
+    impact_df = impact_df.sort_values(by='impact_pct', ascending=False)
+
+    plt.figure(figsize=(12, 8))
+    sns.barplot(x=impact_df.index, y=impact_df['impact_pct'], palette='viridis')
+    plt.title('Percentage Impact on Median Price by Amenity', fontsize=16)
+    plt.xlabel('Amenity')
+    plt.ylabel('Median Price Impact (%) vs. Overall Median')
+    plt.xticks(rotation=45, ha='right')
+    plt.axhline(0, color='black', linewidth=0.8, linestyle='--')
+    plt.tight_layout()
+    plt.show()
+
+def plot_categorical_impact(df: pd.DataFrame, cat_cols: List[str], target_col: str, n_cols: int = 2):
+    """
+    Generates a grid of bar charts showing the impact of categorical features on the median price.
+    """
+    overall_median = df[target_col].median()
+    n_rows = math.ceil(len(cat_cols) / n_cols)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 8, n_rows * 6))
+    axes = axes.flatten()
+
+    for i, col in enumerate(cat_cols):
+        ax = axes[i]
+        if col not in df.columns:
+            ax.set_title(f'Column "{col}" not found')
+            ax.set_visible(False)
+            continue
+
+        grouped = df.groupby(col)[target_col].median()
+        impact_pct = ((grouped - overall_median) / overall_median) * 100
+        impact_pct = impact_pct.sort_values(ascending=False)
+        
+        sns.barplot(x=impact_pct.index, y=impact_pct.values, ax=ax, palette="viridis", order=impact_pct.index)
+        
+        ax.set_title(f'Median Price Impact of "{col}"')
+        ax.set_xlabel(col)
+        ax.set_ylabel('Median Price Impact (%) vs. Overall')
+        ax.tick_params(axis='x', rotation=45)
+        ax.axhline(0, color='black', linewidth=0.8, linestyle='--')
+
+    for j in range(i + 1, len(axes)):
+        axes[j].set_visible(False)
+
+    plt.tight_layout()
     plt.show()
