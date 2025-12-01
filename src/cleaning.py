@@ -94,7 +94,6 @@ def engineer_date_features(
     print(f"Engineering features from date column '{date_col}'...")
     df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
     start_date = pd.to_datetime(start_date_str)
-    df["meses_desde_comienzo"] = (df[date_col] - start_date).dt.days / 30.44
     df["mes_listing"] = df[date_col].dt.month
     df = df.drop(columns=[date_col])
     return df

@@ -255,11 +255,11 @@ def plot_median_price_impact(df: pd.DataFrame, bool_cols: List[str], target_col:
     impact_df = impact_df.sort_values(by='impact_pct', ascending=False)
 
     plt.figure(figsize=(12, 8))
-    sns.barplot(x=impact_df.index, y=impact_df['impact_pct'], palette='viridis')
+    sns.barplot(x=impact_df.index, y=impact_df['impact_pct'], hue=impact_df.index, palette='viridis', legend=False)
     plt.title('Percentage Impact on Median Price by Amenity', fontsize=16)
     plt.xlabel('Amenity')
     plt.ylabel('Median Price Impact (%) vs. Overall Median')
-    plt.xticks(rotation=45, ha='right')
+    plt.xticks(rotation=45)
     plt.axhline(0, color='black', linewidth=0.8, linestyle='--')
     plt.tight_layout()
     plt.show()
@@ -283,23 +283,60 @@ def plot_categorical_impact(df: pd.DataFrame, cat_cols: List[str], target_col: s
         grouped = df.groupby(col)[target_col].median()
         impact_pct = ((grouped - overall_median) / overall_median) * 100
         
-        # --- Smart Sorting Logic ---
         is_numeric_like = pd.to_numeric(impact_pct.index, errors='coerce').notna().all()
         if is_numeric_like:
             impact_pct = impact_pct.sort_index()
         else:
             impact_pct = impact_pct.sort_values(ascending=False)
         
-        sns.barplot(x=impact_pct.index, y=impact_pct.values, ax=ax, palette="viridis", order=impact_pct.index)
+        sns.barplot(x=impact_pct.index, y=impact_pct.values, ax=ax, hue=impact_pct.index, palette="viridis", order=impact_pct.index, legend=False)
         
         ax.set_title(f'Median Price Impact of "{col}"')
         ax.set_xlabel(col)
         ax.set_ylabel('Median Price Impact (%) vs. Overall')
-        ax.tick_params(axis='x', rotation=45)
+        
+        if len(impact_pct.index) > 20:
+            ax.set_xticks([])
+            ax.set_xlabel(f'{col} ({len(impact_pct.index)} categories)')
+        else:
+            ax.tick_params(axis='x', rotation=45)
+            
         ax.axhline(0, color='black', linewidth=0.8, linestyle='--')
 
     for j in range(i + 1, len(axes)):
         axes[j].set_visible(False)
 
+    plt.tight_layout()
+    plt.show()
+
+def plot_feature_impact_ranking(df: pd.DataFrame, cat_cols: List[str], target_col: str):
+    """
+    Ranks and plots the overall impact of categorical features on a target variable.
+    """
+    # --- Logic from rank_categorical_features is now inside this function ---
+    overall_median = df[target_col].median()
+    impact_scores = {}
+
+    for col in cat_cols:
+        if col not in df.columns:
+            print(f"Warning: Column '{col}' not found. Skipping.")
+            continue
+
+        grouped = df.groupby(col)[target_col].median()
+        impact_pct = ((grouped - overall_median) / overall_median) * 100
+        impact_score = impact_pct.std()
+        impact_scores[col] = impact_score
+
+    ranked_df = pd.DataFrame.from_dict(impact_scores, orient='index', columns=['impact_score'])
+    ranked_df = ranked_df.sort_values(by='impact_score', ascending=False)
+    
+    # --- Plotting ---
+    plt.figure(figsize=(12, 8))
+    sns.barplot(x=ranked_df.index, y=ranked_df['impact_score'], hue=ranked_df.index, palette='viridis', legend=False)
+    
+    plt.title('Ranking of Categorical Feature Impact', fontsize=16)
+    plt.xlabel('Feature')
+    plt.ylabel('Impact Score (Std. Dev. of Median Price Impact %)')
+    plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
     plt.show()
