@@ -3,7 +3,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import math
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Union
 import contextily as cx
 
 
@@ -184,7 +184,6 @@ def plot_geo_scatterplot(
         return
 
     df_plot = df.copy()
-
     color_data = df_plot[color_col].dropna()
 
     if clip_percentiles:
@@ -205,32 +204,21 @@ def plot_geo_scatterplot(
         df_plot = df_plot.sample(n=sample_size, random_state=42)
 
     fig, ax = plt.subplots(figsize=(12, 12))
-
     scatter = ax.scatter(
-        x=df_plot[lon_col],
-        y=df_plot[lat_col],
-        c=df_plot["color_values"],
-        cmap=cmap,
-        s=5,
-        edgecolors=None,
-        alpha=alpha,
+        x=df_plot[lon_col], y=df_plot[lat_col], c=df_plot["color_values"],
+        cmap=cmap, s=5, edgecolors=None, alpha=alpha,
     )
-
     cbar = fig.colorbar(scatter, ax=ax, fraction=0.03, pad=0.04)
     cbar.set_label(cbar_label, rotation=270, labelpad=15)
-
     title = f"Geographical Distribution by {cbar_label}"
     if clip_percentiles:
         title += f"\n(Color scale clipped at {clip_percentiles[0]*100:.0f}-{clip_percentiles[1]*100:.0f}th percentiles)"
     ax.set_title(title, fontsize=16)
-
     ax.set_xlabel("Longitude")
     ax.set_ylabel("Latitude")
     ax.axis("equal")
-
     if add_basemap:
         cx.add_basemap(ax, crs="EPSG:4326", source=cx.providers.OpenStreetMap.Mapnik)
-
     plt.show()
 
 def plot_median_price_impact(df: pd.DataFrame, bool_cols: List[str], target_col: str):
@@ -239,7 +227,6 @@ def plot_median_price_impact(df: pd.DataFrame, bool_cols: List[str], target_col:
     """
     impacts = {}
     overall_median = df[target_col].median()
-
     for col in bool_cols:
         if col not in df.columns:
             print(f"Warning: Column '{col}' not found. Skipping.")
@@ -250,10 +237,8 @@ def plot_median_price_impact(df: pd.DataFrame, bool_cols: List[str], target_col:
         else:
             impact = ((median_true - overall_median) / overall_median) * 100
         impacts[col] = impact
-
     impact_df = pd.DataFrame.from_dict(impacts, orient='index', columns=['impact_pct'])
     impact_df = impact_df.sort_values(by='impact_pct', ascending=False)
-
     plt.figure(figsize=(12, 8))
     sns.barplot(x=impact_df.index, y=impact_df['impact_pct'], hue=impact_df.index, palette='viridis', legend=False)
     plt.title('Percentage Impact on Median Price by Amenity', fontsize=16)
@@ -272,40 +257,31 @@ def plot_categorical_impact(df: pd.DataFrame, cat_cols: List[str], target_col: s
     n_rows = math.ceil(len(cat_cols) / n_cols)
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 8, n_rows * 6))
     axes = axes.flatten()
-
     for i, col in enumerate(cat_cols):
         ax = axes[i]
         if col not in df.columns:
             ax.set_title(f'Column "{col}" not found')
             ax.set_visible(False)
             continue
-
         grouped = df.groupby(col)[target_col].median()
         impact_pct = ((grouped - overall_median) / overall_median) * 100
-        
         is_numeric_like = pd.to_numeric(impact_pct.index, errors='coerce').notna().all()
         if is_numeric_like:
             impact_pct = impact_pct.sort_index()
         else:
             impact_pct = impact_pct.sort_values(ascending=False)
-        
         sns.barplot(x=impact_pct.index, y=impact_pct.values, ax=ax, hue=impact_pct.index, palette="viridis", order=impact_pct.index, legend=False)
-        
         ax.set_title(f'Median Price Impact of "{col}"')
         ax.set_xlabel(col)
         ax.set_ylabel('Median Price Impact (%) vs. Overall')
-        
         if len(impact_pct.index) > 20:
             ax.set_xticks([])
             ax.set_xlabel(f'{col} ({len(impact_pct.index)} categories)')
         else:
             ax.tick_params(axis='x', rotation=45)
-            
         ax.axhline(0, color='black', linewidth=0.8, linestyle='--')
-
     for j in range(i + 1, len(axes)):
         axes[j].set_visible(False)
-
     plt.tight_layout()
     plt.show()
 
@@ -313,30 +289,236 @@ def plot_feature_impact_ranking(df: pd.DataFrame, cat_cols: List[str], target_co
     """
     Ranks and plots the overall impact of categorical features on a target variable.
     """
-    # --- Logic from rank_categorical_features is now inside this function ---
     overall_median = df[target_col].median()
     impact_scores = {}
-
     for col in cat_cols:
         if col not in df.columns:
             print(f"Warning: Column '{col}' not found. Skipping.")
             continue
-
         grouped = df.groupby(col)[target_col].median()
         impact_pct = ((grouped - overall_median) / overall_median) * 100
         impact_score = impact_pct.std()
         impact_scores[col] = impact_score
-
     ranked_df = pd.DataFrame.from_dict(impact_scores, orient='index', columns=['impact_score'])
     ranked_df = ranked_df.sort_values(by='impact_score', ascending=False)
-    
-    # --- Plotting ---
     plt.figure(figsize=(12, 8))
     sns.barplot(x=ranked_df.index, y=ranked_df['impact_score'], hue=ranked_df.index, palette='viridis', legend=False)
-    
     plt.title('Ranking of Categorical Feature Impact', fontsize=16)
     plt.xlabel('Feature')
     plt.ylabel('Impact Score (Std. Dev. of Median Price Impact %)')
     plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.show()
+
+def plot_missing_values(
+    df: pd.DataFrame, 
+    numeric_cols: List[str] = None, 
+    bool_cols: List[str] = None, 
+    cat_cols: List[str] = None
+):
+    """
+    Calculates and plots the percentage of missing values, coloring bars by column type.
+    """
+    missing_pct = (df.isnull().sum() / len(df) * 100).sort_values(ascending=False)
+    missing_pct = missing_pct[missing_pct > 0]
+    
+    if missing_pct.empty:
+        print("No missing values found in the DataFrame.")
+        return
+        
+    color_map = {
+        'numeric': '#1f77b4',
+        'boolean': '#ff7f0e',
+        'categorical': '#2ca02c',
+        'other': '#d62728'
+    }
+
+    col_to_type = {}
+    if numeric_cols:
+        for col in numeric_cols: col_to_type[col] = 'numeric'
+    if bool_cols:
+        for col in bool_cols: col_to_type[col] = 'boolean'
+    if cat_cols:
+        for col in cat_cols: col_to_type[col] = 'categorical'
+        
+    palette = {col: color_map.get(col_to_type.get(col, 'other'), 'gray') for col in missing_pct.index}
+
+    plt.figure(figsize=(15, 8))
+    sns.barplot(x=missing_pct.index, y=missing_pct.values, hue=missing_pct.index, palette=palette, legend=False)
+    
+    plt.title('Percentage of Missing Values by Column', fontsize=16)
+    plt.xlabel('Columns')
+    plt.ylabel('% of Missing Values')
+    plt.xticks(rotation=45, ha='right')
+    
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor=color_map.get(type_name), label=type_name.capitalize())
+        for type_name in color_map if type_name in col_to_type.values()
+    ]
+    plt.legend(handles=legend_elements, title='Column Type')
+    
+    plt.show()
+    
+    not_plotted_cols = df.columns[df.isnull().sum() == 0].tolist()
+    if not_plotted_cols:
+        print(f"\nInfo: The following {len(not_plotted_cols)} columns are not shown because they have no missing values:")
+        col_str = ", ".join(not_plotted_cols)
+        print(col_str)
+
+def plot_missing_data_impact(
+    df: pd.DataFrame,
+    target_col: str,
+    numeric_cols: List[str] = None,
+    bool_cols: List[str] = None,
+    cat_cols: List[str] = None,
+    n_cols: int = 3,
+    exclude_cols: List[str] = None
+):
+    """
+    Generates a grid of boxplots to analyze the impact of missing data on the target variable.
+    """
+    df_plot = df.copy()
+    df_plot[target_col] = np.log1p(df_plot[target_col])
+    
+    cols_with_missing = df_plot.columns[df_plot.isnull().any()].tolist()
+    
+    if exclude_cols:
+        cols_with_missing = [col for col in cols_with_missing if col not in exclude_cols]
+
+    if not cols_with_missing:
+        print("No columns with missing values to plot.")
+        return
+
+    n_rows = math.ceil(len(cols_with_missing) / n_cols)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 6, n_rows * 5))
+    axes = axes.flatten()
+
+    color_map = {
+        'numeric': '#1f77b4',
+        'boolean': '#ff7f0e',
+        'categorical': '#2ca02c',
+        'other': '#d62728'
+    }
+    col_to_type = {}
+    if numeric_cols:
+        for col in numeric_cols: col_to_type[col] = 'numeric'
+    if bool_cols:
+        for col in bool_cols: col_to_type[col] = 'boolean'
+    if cat_cols:
+        for col in cat_cols: col_to_type[col] = 'categorical'
+
+    for i, col in enumerate(cols_with_missing):
+        ax = axes[i]
+        
+        is_missing_col = f'{col}_is_missing'
+        df_plot[is_missing_col] = df_plot[col].isnull().map({True: 'Missing', False: 'Present'})
+        
+        color = color_map.get(col_to_type.get(col, 'other'), 'gray')
+        
+        palette = {'Missing': color, 'Present': sns.set_hls_values(color, l=0.8)}
+        
+        sns.boxplot(
+            data=df_plot,
+            x=is_missing_col,
+            y=target_col,
+            ax=ax,
+            hue=is_missing_col,
+            palette=palette,
+            order=['Present', 'Missing'],
+            legend=False
+        )
+        ax.set_title(f'Impact of Missing "{col}"')
+        ax.set_xlabel(None)
+        ax.set_ylabel(f'Log({target_col})')
+
+    for j in range(len(cols_with_missing), len(axes)):
+        axes[j].set_visible(False)
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_interaction(
+    df: pd.DataFrame, 
+    target_col: str, 
+    x_cols: Union[str, List[str]], 
+    facet_col: str
+):
+    """
+    Visualizes the interaction between one or more variables and a facet variable.
+    """
+    if isinstance(x_cols, str):
+        x_cols = [x_cols]
+
+    df_plot = df.copy()
+    df_plot[target_col] = np.log1p(df_plot[target_col])
+
+    for x_col in x_cols:
+        if pd.api.types.is_numeric_dtype(df_plot[x_col].dropna()):
+            x_order = sorted(df_plot[x_col].dropna().unique())
+        else:
+            x_order = df_plot.groupby(x_col)[target_col].median().sort_values().index
+
+        g = sns.catplot(
+            data=df_plot,
+            x=x_col,
+            y=target_col,
+            col=facet_col,
+            kind='box',
+            order=x_order,
+            col_wrap=4,
+            height=5,
+            aspect=1.2,
+            hue=x_col,
+            palette='viridis',
+            legend=False
+        )
+        
+        g.fig.suptitle(f'Interaction between "{x_col}" and "{facet_col}" on Log({target_col})', y=1.03)
+        g.set_axis_labels(x_col, f"Log({target_col})")
+        g.set_titles(f"{facet_col}: {{col_name}}")
+        g.fig.tight_layout()
+        plt.show()
+
+def plot_numeric_vs_target(
+    df: pd.DataFrame,
+    numeric_cols: List[str],
+    target_col: str,
+    n_cols: int = 2,
+    sample_size: int = 2000
+):
+    """
+    Generates a grid of scatter plots for numeric features against a target variable.
+    """
+    df_plot = df.copy()
+    df_plot[target_col] = np.log1p(df_plot[target_col])
+    
+    if sample_size and sample_size < len(df_plot):
+        df_plot = df_plot.sample(n=sample_size, random_state=42)
+
+    n_rows = math.ceil(len(numeric_cols) / n_cols)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 8, n_rows * 6))
+    axes = axes.flatten()
+
+    for i, col in enumerate(numeric_cols):
+        ax = axes[i]
+        if col not in df.columns:
+            ax.set_title(f'Column "{col}" not found')
+            ax.set_visible(False)
+            continue
+
+        sns.scatterplot(
+            data=df_plot,
+            x=col,
+            y=target_col,
+            ax=ax,
+            alpha=0.3,
+            edgecolor=None
+        )
+        ax.set_title(f'"{col}" vs. Log({target_col})')
+
+    for j in range(i + 1, len(axes)):
+        axes[j].set_visible(False)
+
     plt.tight_layout()
     plt.show()
