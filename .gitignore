@@ -4,8 +4,7 @@ data/*
 # intellij
 .idea/
 
-# AI Assistants
-GEMINI.md
+PLAN.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -22,7 +21,7 @@ develop-eggs/
 dist/
 downloads/
 eggs/
-.eggs/
+.eggs/s
 lib/
 lib64/
 parts/
