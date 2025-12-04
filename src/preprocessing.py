@@ -59,7 +59,16 @@ class OutlierClipper(BaseEstimator, TransformerMixin):
         self.upper_pct = upper_pct
         self.limits_ = {}
 
-    def fit(self, X: pd.DataFrame, y: pd.Series = None):
+    def fit(self, X, y=None):
+        # Si es array (viene de TransformedTargetRegressor), lo convertimos a DF
+        if not isinstance(X, pd.DataFrame):
+            # Asumimos que si es array y hay 1 columna en cols_to_clip, es esa.
+            if len(self.cols_to_clip) == 1:
+                X = pd.DataFrame(X, columns=self.cols_to_clip)
+            else:
+                # Si no podemos inferir nombres, no hacemos nada en fit
+                return self
+
         # aprender el límite de los percentiles (el valor a partir del cual cortar)
         for col in self.cols_to_clip:
             if col in X.columns:
@@ -67,15 +76,27 @@ class OutlierClipper(BaseEstimator, TransformerMixin):
                 self.limits_[col] = upper_limit
         return self
 
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        X_copy = X.copy()
-
+    def transform(self, X) -> pd.DataFrame:
+        # Manejo de array a DF
+        is_array = not isinstance(X, pd.DataFrame)
+        if is_array:
+             if len(self.cols_to_clip) == 1:
+                X_df = pd.DataFrame(X, columns=self.cols_to_clip)
+             else:
+                return X # No podemos transformar sin nombres
+        else:
+            X_df = X.copy()
+        
         # clipeamos los datos del percentil más alto al valor del límite
         for col in self.cols_to_clip:
-            if col in self.limits_:
+            if col in self.limits_ and col in X_df.columns:
                 limit = self.limits_[col]
-                X_copy[col] = X_copy[col].clip(upper=limit)
-        return X_copy
+                X_df[col] = X_df[col].clip(upper=limit)
+        
+        # Si entró como array, devolvemos array (para que sklearn no se queje)
+        if is_array:
+            return X_df.to_numpy()
+        return X_df
 
 
 class MedianImputer(BaseEstimator, TransformerMixin):
