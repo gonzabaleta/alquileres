@@ -22,6 +22,7 @@ class COLS:
     TIPO_PROPIEDAD = "TIPOPROPIEDAD"
     SUP_TOTAL = "STotalM2"
     SUP_CONSTR = "SConstrM2"
+    SUP_DESCUBIERTA = "SDescubiertaM2"
     DORMITORIOS = "Dormitorios"
     BANOS = "Banos"
     AMBIENTES = "Ambientes"
