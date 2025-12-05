@@ -2,7 +2,13 @@ import numpy as np
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler, TargetEncoder, OrdinalEncoder
+from sklearn.preprocessing import (
+    FunctionTransformer,
+    OneHotEncoder,
+    StandardScaler,
+    TargetEncoder,
+    OrdinalEncoder,
+)
 from typing import List, TypedDict
 
 from src.preprocessing import (
@@ -29,19 +35,24 @@ class OutlierClipperParams(TypedDict):
     upper_pct: float  # percentil a clipear
 
 
+class TargetParams(TypedDict):
+    target_clipper_params: OutlierClipperParams
+    log_transform: bool
+
+
 class PipelineConfig(TypedDict):
     cols_to_drop: List[str]  # columnas que se van a eliminar
     feature_creator_params: FeatureCreatorParams
     median_imputer_cols: List[str]  # columnas que se van a imputar con la mediana
     outlier_clipper_params: OutlierClipperParams
-    discrete_numeric_cols: List[str]  # columnas que se van a imputar con la moda
-    continuous_numeric_cols: List[str]  # log transform y estandarización
-    standard_scale_cols: List[str]  # Solo estandarización (sin log) - para coordenadas
-    ohe_cols: List[str]  # columnas para one hot encoding
+    mode_imputation_cols: List[str]  # columnas que se van a imputar con la moda
+    log_std_cols: List[str]  # log transform y estandarización
+    std_only_cols: List[str]  # Solo estandarización (sin log) - para coordenadas
+    one_hot_cols: List[str]  # columnas para one hot encoding
     boolean_imputer_cols: List[str]  # columnas booleanas (imputar con False)
-    target_clipper_params: OutlierClipperParams  # al precio lo clipeamos
-    target_encode_cols: List[str] # columnas para target encoding
-    ordinal_cols: List[str] # columnas para ordinal encoding
+    target_encode_cols: List[str]  # columnas para target encoding
+    ordinal_cols: List[str]  # columnas para ordinal encoding
+    target_params: TargetParams
 
 
 def build_feature_pipeline(config: PipelineConfig) -> Pipeline:
@@ -50,7 +61,7 @@ def build_feature_pipeline(config: PipelineConfig) -> Pipeline:
     """
     # Sub-pipeline para numéricas discretas (ej: Dormitorios, Banos)
     # Solo se imputan con la moda (el valor más frecuente)
-    discrete_numeric_transformer = Pipeline(
+    mode_imputator = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
         ]
@@ -58,7 +69,7 @@ def build_feature_pipeline(config: PipelineConfig) -> Pipeline:
 
     # Sub-pipeline para numéricas continuas (ej: Antiguedad, Superficie)
     # Transformación log y estandarización (la imputacion se hace antes)
-    continuous_numeric_transformer = Pipeline(
+    std_log_transformer = Pipeline(
         steps=[
             (
                 "log_transformer",
@@ -71,7 +82,7 @@ def build_feature_pipeline(config: PipelineConfig) -> Pipeline:
     )
 
     # Sub-pipeline para numéricas que solo necesitan estandarización (ej: Latitud, Longitud)
-    standard_scaler_transformer = Pipeline(
+    std_transformer = Pipeline(
         steps=[
             ("scaler", StandardScaler()),
         ]
@@ -81,12 +92,15 @@ def build_feature_pipeline(config: PipelineConfig) -> Pipeline:
     target_encoding_transformer = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
-            ("target_encoder", TargetEncoder(target_type="continuous", smooth="auto", random_state=42)),
+            (
+                "target_encoder",
+                TargetEncoder(target_type="continuous", smooth="auto", random_state=42),
+            ),
         ]
     )
 
     # Sub-pipeline para categóricas que necesitan One-Hot Encoding
-    categorical_transformer = Pipeline(
+    one_hot_encoder = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
             ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
@@ -94,18 +108,13 @@ def build_feature_pipeline(config: PipelineConfig) -> Pipeline:
     )
 
     # Sub-pipeline para categóricas ordinales
-    ordinal_transformer = Pipeline(
+    ordinal_encoder = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
-            ("ordinal_encoder", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)),
-        ]
-    )
-
-    # Sub-pipeline para categóricas ordinales
-    ordinal_transformer = Pipeline(
-        steps=[
-            ("imputer", SimpleImputer(strategy="most_frequent")),
-            ("ordinal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)),
+            (
+                "ordinal",
+                OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1),
+            ),
         ]
     )
 
@@ -115,23 +124,31 @@ def build_feature_pipeline(config: PipelineConfig) -> Pipeline:
     preprocessor = ColumnTransformer(
         transformers=[
             (
-                "discrete_numeric",
-                discrete_numeric_transformer,
-                config["discrete_numeric_cols"],
+                "mode_imputator",
+                mode_imputator,
+                config["mode_imputation_cols"],
             ),
             (
-                "continuous_numeric",
-                continuous_numeric_transformer,
-                config["continuous_numeric_cols"],
+                "std_log_transformer",
+                std_log_transformer,
+                config["log_std_cols"],
             ),
             (
                 "standard_scale",
-                standard_scaler_transformer,
-                config["standard_scale_cols"],
+                std_transformer,
+                config["std_only_cols"],
             ),
-            ("categorical", categorical_transformer, config["ohe_cols"]),
-            ("categorical_target", target_encoding_transformer, config.get("target_encode_cols", [])),
-            ("categorical_ordinal", ordinal_transformer, config.get("ordinal_cols", [])),
+            ("one_hot_encoder", one_hot_encoder, config["one_hot_cols"]),
+            (
+                "target_encoding",
+                target_encoding_transformer,
+                config.get("target_encode_cols", []),
+            ),
+            (
+                "ordinal_encoder",
+                ordinal_encoder,
+                config.get("ordinal_cols", []),
+            ),
             ("boolean", boolean_transformer, config["boolean_imputer_cols"]),
         ],
         remainder="passthrough",
@@ -159,15 +176,30 @@ def build_target_pipeline(config: PipelineConfig) -> Pipeline:
     Construye el pipeline de preprocesamiento para el target (y).
     Clipea outliers y aplica transformación logarítmica.
     """
-    target_pipeline = Pipeline(
-        steps=[
-            ("clipper", OutlierClipper(**config["target_clipper_params"])),
+    steps = [
+        (
+            "clipper",
+            OutlierClipper(
+                cols_to_clip=config["target_params"]["target_clipper_params"][
+                    "cols_to_clip"
+                ],
+                upper_pct=config["target_params"]["target_clipper_params"]["upper_pct"],
+            ),
+        )
+    ]
+
+    if config["target_params"]["log_transform"]:
+        steps.append(
             (
                 "log_transformer",
                 FunctionTransformer(
-                    np.log1p, validate=False, feature_names_out="one-to-one"
+                    np.log1p, 
+                    inverse_func=np.expm1, 
+                    validate=False, 
+                    feature_names_out="one-to-one"
                 ),
-            ),
-        ]
-    )
+            )
+        )
+
+    target_pipeline = Pipeline(steps=steps)
     return target_pipeline

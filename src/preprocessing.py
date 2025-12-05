@@ -98,6 +98,9 @@ class OutlierClipper(BaseEstimator, TransformerMixin):
             return X_df.to_numpy()
         return X_df
 
+    def inverse_transform(self, X, y=None):
+        return X
+
 
 class MedianImputer(BaseEstimator, TransformerMixin):
     """
