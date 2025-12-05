@@ -48,5 +48,7 @@ pipeline_config = PipelineConfig(
         COLS.JACUZZI,
     ],
     ohe_cols=[COLS.PROVINCIA, COLS.CONDICION, COLS.ANIO],
-    target_clipper_params={"cols_to_clip": [COLS.TARGET], "upper_pct": 0.98},
+    target_clipper_params={"cols_to_clip": [], "upper_pct": 1.0},
+    ordinal_cols=[COLS.BARRIO, COLS.CIUDAD],
+    
 )

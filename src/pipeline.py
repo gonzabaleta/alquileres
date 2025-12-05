@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler
+from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler, TargetEncoder, OrdinalEncoder
 from typing import List, TypedDict
 
 from src.preprocessing import (
@@ -40,6 +40,8 @@ class PipelineConfig(TypedDict):
     ohe_cols: List[str]  # columnas para one hot encoding
     boolean_imputer_cols: List[str]  # columnas booleanas (imputar con False)
     target_clipper_params: OutlierClipperParams  # al precio lo clipeamos
+    target_encode_cols: List[str] # columnas para target encoding
+    ordinal_cols: List[str] # columnas para ordinal encoding
 
 
 def build_feature_pipeline(config: PipelineConfig) -> Pipeline:
@@ -75,11 +77,35 @@ def build_feature_pipeline(config: PipelineConfig) -> Pipeline:
         ]
     )
 
+    # Sub-pipeline para categóricas con Alta Cardinalidad (Barrios, Ciudades)
+    target_encoding_transformer = Pipeline(
+        steps=[
+            ("imputer", SimpleImputer(strategy="most_frequent")),
+            ("target_encoder", TargetEncoder(target_type="continuous", smooth="auto", random_state=42)),
+        ]
+    )
+
     # Sub-pipeline para categóricas que necesitan One-Hot Encoding
     categorical_transformer = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
             ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+        ]
+    )
+
+    # Sub-pipeline para categóricas ordinales
+    ordinal_transformer = Pipeline(
+        steps=[
+            ("imputer", SimpleImputer(strategy="most_frequent")),
+            ("ordinal_encoder", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)),
+        ]
+    )
+
+    # Sub-pipeline para categóricas ordinales
+    ordinal_transformer = Pipeline(
+        steps=[
+            ("imputer", SimpleImputer(strategy="most_frequent")),
+            ("ordinal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)),
         ]
     )
 
@@ -104,6 +130,8 @@ def build_feature_pipeline(config: PipelineConfig) -> Pipeline:
                 config["standard_scale_cols"],
             ),
             ("categorical", categorical_transformer, config["ohe_cols"]),
+            ("categorical_target", target_encoding_transformer, config.get("target_encode_cols", [])),
+            ("categorical_ordinal", ordinal_transformer, config.get("ordinal_cols", [])),
             ("boolean", boolean_transformer, config["boolean_imputer_cols"]),
         ],
         remainder="passthrough",
