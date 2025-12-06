@@ -1,11 +1,13 @@
 import pandas as pd
+import warnings
 from sklearn.base import BaseEstimator, TransformerMixin
-from typing import List
+from typing import List, TypedDict
+from src.utils import COLS
 
 
 class ColumnDropper(BaseEstimator, TransformerMixin):
     """
-    Elimina las columnas especificadas de un DataFrame.
+    Elimina columnas del DataFrame
     """
 
     def __init__(self, columns: List[str]):
@@ -20,29 +22,81 @@ class ColumnDropper(BaseEstimator, TransformerMixin):
 
 class FeatureCreator(BaseEstimator, TransformerMixin):
     """
-    Crea la feature 'SDescubiertaM2' como la diferencia entre 'STotalM2' y 'SConstrM2'.
+    Crea features nuevas a partir de las existentes según lo experimentado en 04-feature-engineering.ipynb
     """
 
     def __init__(
         self,
-        total_col,
-        constr_col,
-        new_col_name,
+        add_amenities_score: bool = True,
+        add_room_density: bool = True,
+        add_bath_bed_ratio: bool = True,
+        add_uncovered_pct: bool = True,
+        add_m2_valorizados: bool = True,
     ):
-        self.total = total_col
-        self.constr = constr_col
-        self.new = new_col_name
+        self.add_amenities_score = add_amenities_score
+        self.add_room_density = add_room_density
+        self.add_bath_bed_ratio = add_bath_bed_ratio
+        self.add_uncovered_pct = add_uncovered_pct
+        self.add_m2_valorizados = add_m2_valorizados
 
-    def fit(self, X: pd.DataFrame, y: pd.Series = None):
+        self.amenities_list = [
+            COLS.AMOBLADO,
+            COLS.GIMNASIO,
+            COLS.LAUNDRY,
+            COLS.CALEFACCION,
+            COLS.AIRE,
+            COLS.SEGURIDAD,
+            COLS.PILETA,
+            COLS.TENNIS,
+            COLS.RECEPCION,
+            COLS.BUSINESS,
+            COLS.ESTACIONAMIENTO,
+            "SUM",
+            COLS.JACUZZI,
+        ]
+
+    def fit(self, X, y=None):
         return self
 
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        X_copy = X.copy()
-        if self.total in X_copy.columns and self.constr in X_copy.columns:
-            # agregar columna descubierta como diferencia entre total y constr
-            X_copy[self.new] = X_copy[self.total] - X_copy[self.constr]
-            X_copy[self.new] = X_copy[self.new].clip(lower=0)  # eliminar negativos
-        return X_copy
+    def transform(self, X):
+        X_df = X.copy() if isinstance(X, pd.DataFrame) else pd.DataFrame(X)
+
+        # Silenciamos el FutureWarning de pandas sobre downcasting en los fillna
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=FutureWarning)
+
+            # 1. Porcentaje de superficie descubierta
+            if self.add_uncovered_pct:
+                # Creamos la col descubierta primero
+                col_descubierta = COLS.SUP_DESCUBIERTA
+                X_df[col_descubierta] = (X_df[COLS.SUP_TOTAL] - X_df[COLS.SUP_CONSTR]).clip(
+                    lower=0
+                )
+
+                total_safe = X_df[COLS.SUP_TOTAL].replace(0, pd.NA).fillna(1).infer_objects(copy=False)
+                X_df[COLS.SUP_DESCUBIERTA_PCT] = X_df[col_descubierta] / total_safe
+
+            # 2. Densidad (M2 por Ambiente)
+            if self.add_room_density and COLS.AMBIENTES in X_df.columns:
+                amb_safe = X_df[COLS.AMBIENTES].replace(0, pd.NA).fillna(1).infer_objects(copy=False)
+                X_df[COLS.M2_POR_AMBIENTE] = X_df[COLS.SUP_TOTAL] / amb_safe
+
+            # 3. Baños por Dormitorio
+            if (
+                self.add_bath_bed_ratio
+                and COLS.BANOS in X_df.columns
+                and COLS.DORMITORIOS in X_df.columns
+            ):
+                dorm_safe = X_df[COLS.DORMITORIOS].replace(0, pd.NA).fillna(1).infer_objects(copy=False)
+                X_df[COLS.BANOS_POR_DORMITORIO] = X_df[COLS.BANOS] / dorm_safe
+
+            # 4. Amenities Score
+            if self.add_amenities_score:
+                valid_amenities = [c for c in self.amenities_list if c in X_df.columns]
+                if valid_amenities:
+                    X_df[COLS.AMENITIES_SCORE] = X_df[valid_amenities].sum(axis=1)
+
+        return X_df
 
 
 class OutlierClipper(BaseEstimator, TransformerMixin):
@@ -118,14 +172,19 @@ class MedianImputer(BaseEstimator, TransformerMixin):
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         X_copy = X.copy()
-        for col in self.cols_to_impute:
-            if col in X_copy.columns:
-                # creamos flag indicando que la columna fue imputada
-                flag_col_name = f"{col}_is_missing"
-                X_copy[flag_col_name] = X_copy[col].isnull()
+        
+        # Silenciamos el FutureWarning de pandas sobre downcasting
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=FutureWarning)
+            
+            for col in self.cols_to_impute:
+                if col in X_copy.columns:
+                    # creamos flag indicando que la columna fue imputada
+                    flag_col_name = f"{col}_is_missing"
+                    X_copy[flag_col_name] = X_copy[col].isnull()
 
-                # imputamos la mediana.
-                median_val = self.medians_.get(col)
-                if median_val is not None:
-                    X_copy[col] = X_copy[col].fillna(median_val)
+                    # imputamos la mediana.
+                    median_val = self.medians_.get(col)
+                    if median_val is not None:
+                        X_copy[col] = X_copy[col].fillna(median_val).infer_objects(copy=False)
         return X_copy

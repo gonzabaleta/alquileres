@@ -7,11 +7,12 @@ from src.pipeline import (
 from src.utils import COLS
 
 # Parámetros compartidos en varias configuraciones
-COLS_TO_DROP = [COLS.ID_GRID, COLS.SUP_TOTAL]
+COLS_TO_DROP = [COLS.SUP_TOTAL]
 FEATURE_CREATOR_PARAMS = FeatureCreatorParams(
-    total_col=COLS.SUP_TOTAL,
-    constr_col=COLS.SUP_CONSTR,
-    new_col_name=COLS.SUP_DESCUBIERTA,
+    add_amenities_score=True,
+    add_room_density=True,
+    add_bath_bed_ratio=True,
+    add_uncovered_pct=True,
 )
 OUTLIER_CLIPPER_PARAMS = OutlierClipperParams(
     cols_to_clip=[
@@ -25,7 +26,15 @@ OUTLIER_CLIPPER_PARAMS = OutlierClipperParams(
     ],
     upper_pct=0.98,
 )
-MEDIAN_IMPUTER_COLS = [COLS.ANTIGUEDAD, COLS.SUP_DESCUBIERTA, COLS.SUP_CONSTR]
+MEDIAN_IMPUTER_COLS = [
+    COLS.ANTIGUEDAD,
+    COLS.SUP_DESCUBIERTA,
+    COLS.SUP_CONSTR,
+    COLS.SUP_DESCUBIERTA_PCT,
+    COLS.M2_POR_AMBIENTE,
+    COLS.BANOS_POR_DORMITORIO,
+    COLS.AMENITIES_SCORE,
+]
 MODE_IMPUTATION_COLS = [COLS.AMBIENTES, COLS.DORMITORIOS, COLS.BANOS, COLS.COCHERAS]
 LOG_STD_COLS = [COLS.SUP_CONSTR, COLS.SUP_DESCUBIERTA, COLS.ANTIGUEDAD]
 STD_ONLY_COLS = [COLS.LONGITUD, COLS.LATITUD]
@@ -64,8 +73,22 @@ decision_trees_pipeline_config = PipelineConfig(
         log_transform=False,
     ),
     ordinal_cols=[COLS.BARRIO, COLS.CIUDAD],
-    target_encode_cols=[],
+    target_encode_cols=[COLS.ID_GRID],
 )
+
+# Definimos las columnas que necesitan escalado para modelos lineales (Todas las numéricas)
+LINEAR_STD_COLS = [
+    COLS.LONGITUD,
+    COLS.LATITUD,
+    COLS.SUP_DESCUBIERTA_PCT,
+    COLS.M2_POR_AMBIENTE,
+    COLS.BANOS_POR_DORMITORIO,
+    COLS.AMENITIES_SCORE,
+    COLS.AMBIENTES,
+    COLS.DORMITORIOS,
+    COLS.BANOS,
+    COLS.COCHERAS,
+]
 
 # Modelos lineales van a tener el target transformado y clipeado
 linear_models_pipeline_config = PipelineConfig(
@@ -75,7 +98,7 @@ linear_models_pipeline_config = PipelineConfig(
     outlier_clipper_params=OUTLIER_CLIPPER_PARAMS,
     mode_imputation_cols=MODE_IMPUTATION_COLS,
     log_std_cols=LOG_STD_COLS,
-    std_only_cols=STD_ONLY_COLS,
+    std_only_cols=LINEAR_STD_COLS,
     boolean_imputer_cols=BOOLEAN_IMPUTER_COLS,
     one_hot_cols=ONE_HOT_COLS,
     target_params=TargetParams(
@@ -85,5 +108,5 @@ linear_models_pipeline_config = PipelineConfig(
         log_transform=True,
     ),
     ordinal_cols=[],
-    target_encode_cols=[COLS.BARRIO, COLS.CIUDAD],
+    target_encode_cols=[COLS.BARRIO, COLS.CIUDAD, COLS.ID_GRID],
 )

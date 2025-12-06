@@ -11,7 +11,10 @@ def get_dummy_model():
 
 def get_base_lasso(preprocessor):
     return Pipeline(
-        [("preprocessor", preprocessor), ("lasso", Lasso(alpha=1, random_state=42))]
+        [
+            ("preprocessor", preprocessor),
+            ("lasso", Lasso(alpha=10, random_state=42)),
+        ]
     )
 
 

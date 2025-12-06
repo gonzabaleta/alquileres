@@ -22,11 +22,12 @@ from src.preprocessing import (
 # Configuación del pipeline:
 
 
-# Config para la nueva columna de superficie descubierta
+# Config para las nuevas columnas
 class FeatureCreatorParams(TypedDict):
-    total_col: str
-    constr_col: str
-    new_col_name: str
+    add_amenities_score: bool
+    add_room_density: bool
+    add_bath_bed_ratio: bool
+    add_uncovered_pct: bool
 
 
 # Config para clippear columnas
@@ -60,7 +61,6 @@ def build_feature_pipeline(config: PipelineConfig) -> Pipeline:
     Construye el pipeline de preprocesamiento para las features (X).
     """
     # Sub-pipeline para numéricas discretas (ej: Dormitorios, Banos)
-    # Solo se imputan con la moda (el valor más frecuente)
     mode_imputator = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
@@ -68,9 +68,9 @@ def build_feature_pipeline(config: PipelineConfig) -> Pipeline:
     )
 
     # Sub-pipeline para numéricas continuas (ej: Antiguedad, Superficie)
-    # Transformación log y estandarización (la imputacion se hace antes)
     std_log_transformer = Pipeline(
         steps=[
+            ("imputer", SimpleImputer(strategy="median")),
             (
                 "log_transformer",
                 FunctionTransformer(
@@ -81,9 +81,10 @@ def build_feature_pipeline(config: PipelineConfig) -> Pipeline:
         ]
     )
 
-    # Sub-pipeline para numéricas que solo necesitan estandarización (ej: Latitud, Longitud)
+    # Sub-pipeline para numéricas que solo necesitan estandarización
     std_transformer = Pipeline(
         steps=[
+            ("imputer", SimpleImputer(strategy="median")),
             ("scaler", StandardScaler()),
         ]
     )
@@ -96,10 +97,11 @@ def build_feature_pipeline(config: PipelineConfig) -> Pipeline:
                 "target_encoder",
                 TargetEncoder(target_type="continuous", smooth="auto", random_state=42),
             ),
+            ("scaler", StandardScaler()),
         ]
     )
 
-    # Sub-pipeline para categóricas que necesitan One-Hot Encoding
+    # Sub-pipeline para One-Hot
     one_hot_encoder = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
@@ -118,7 +120,7 @@ def build_feature_pipeline(config: PipelineConfig) -> Pipeline:
         ]
     )
 
-    # Sub-pipeline para amenities booleanas (imputar con false)
+    # Sub-pipeline para amenities booleanas
     boolean_transformer = SimpleImputer(strategy="constant", fill_value=False)
 
     preprocessor = ColumnTransformer(
@@ -232,5 +234,6 @@ def build_base_pipeline(numeric_cols, categorical_cols):
         transformers=[
             ("num", numeric_transformer, numeric_cols),
             ("cat", categorical_transformer, categorical_cols),
-        ]
+        ],
+        remainder="passthrough",
     )

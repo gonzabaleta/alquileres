@@ -25,11 +25,15 @@ class COLS:
     SUP_TOTAL = "STotalM2"
     SUP_CONSTR = "SConstrM2"
     SUP_DESCUBIERTA = "SDescubiertaM2"
+    SUP_DESCUBIERTA_PCT = "pct_descubierto"
+    BANOS_POR_DORMITORIO = "Banos_por_dormitorio"
+    M2_POR_AMBIENTE = "M2_por_ambiente"
     DORMITORIOS = "Dormitorios"
     BANOS = "Banos"
     AMBIENTES = "Ambientes"
     ANTIGUEDAD = "Antiguedad"
     COCHERAS = "Cocheras"
+    AMENITIES_SCORE = "amenities_score"
 
     # --- Features de Ubicación ---
     CIUDAD = "ITE_ADD_CITY_NAME"
