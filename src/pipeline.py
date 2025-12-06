@@ -193,13 +193,44 @@ def build_target_pipeline(config: PipelineConfig) -> Pipeline:
             (
                 "log_transformer",
                 FunctionTransformer(
-                    np.log1p, 
-                    inverse_func=np.expm1, 
-                    validate=False, 
-                    feature_names_out="one-to-one"
+                    np.log1p,
+                    inverse_func=np.expm1,
+                    validate=False,
+                    feature_names_out="one-to-one",
                 ),
             )
         )
 
     target_pipeline = Pipeline(steps=steps)
     return target_pipeline
+
+
+def build_base_pipeline(numeric_cols, categorical_cols):
+    """
+    Pipeline para los modelos base (hace lo mínimo para que puedan funcionar
+    """
+
+    # Numéricas: Imputar mediana
+    numeric_transformer = Pipeline(
+        [
+            ("imputer", SimpleImputer(strategy="median")),
+        ]
+    )
+
+    # Categóricas: Imputar moda + Ordinal
+    categorical_transformer = Pipeline(
+        [
+            ("imputer", SimpleImputer(strategy="most_frequent")),
+            (
+                "ordinal_encoder",
+                OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1),
+            ),
+        ]
+    )
+
+    return ColumnTransformer(
+        transformers=[
+            ("num", numeric_transformer, numeric_cols),
+            ("cat", categorical_transformer, categorical_cols),
+        ]
+    )

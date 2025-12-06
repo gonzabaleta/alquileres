@@ -61,7 +61,7 @@ decision_trees_pipeline_config = PipelineConfig(
         target_clipper_params=OutlierClipperParams(
             cols_to_clip=[COLS.TARGET], upper_pct=1  # no clipeamos target
         ),
-        log_transform=True,
+        log_transform=False,
     ),
     ordinal_cols=[COLS.BARRIO, COLS.CIUDAD],
     target_encode_cols=[],

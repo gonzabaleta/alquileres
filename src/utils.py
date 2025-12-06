@@ -1,5 +1,7 @@
 import pandas as pd
 from typing import List
+import numpy as np
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 DEV_SET_RAW_PATH = "data/raw/alquiler_AMBA_dev.csv"
 DEV_SET_CLEAN_PATH = "data/processed/dev_set_clean.csv"
@@ -174,3 +176,15 @@ def get_existing_columns(df: pd.DataFrame, columns: List[str]) -> List[str]:
             f"Warning: The following columns were not found in the DataFrame and will be ignored: {', '.join(missing_cols)}"
         )
     return existing_cols
+
+
+def print_model_metrics(y_true, y_pred, model_name):
+    """Imprime métricas de un modelo"""
+    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+    mae = mean_absolute_error(y_true, y_pred)
+    r2 = r2_score(y_true, y_pred)
+    print(f"=== Modelo: {model_name} ===")
+    print(f"RMSE: {rmse:.4f}")
+    print(f"MAE: {mae:.4f}")
+    print(f"R2: {r2:.4f}")
+    print("-" * 50)

@@ -1,9 +1,6 @@
 import pandas as pd
-import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 from typing import List
-
-from src.utils import COLS
 
 
 class ColumnDropper(BaseEstimator, TransformerMixin):
@@ -80,19 +77,19 @@ class OutlierClipper(BaseEstimator, TransformerMixin):
         # Manejo de array a DF
         is_array = not isinstance(X, pd.DataFrame)
         if is_array:
-             if len(self.cols_to_clip) == 1:
+            if len(self.cols_to_clip) == 1:
                 X_df = pd.DataFrame(X, columns=self.cols_to_clip)
-             else:
-                return X # No podemos transformar sin nombres
+            else:
+                return X  # No podemos transformar sin nombres
         else:
             X_df = X.copy()
-        
+
         # clipeamos los datos del percentil más alto al valor del límite
         for col in self.cols_to_clip:
             if col in self.limits_ and col in X_df.columns:
                 limit = self.limits_[col]
                 X_df[col] = X_df[col].clip(upper=limit)
-        
+
         # Si entró como array, devolvemos array (para que sklearn no se queje)
         if is_array:
             return X_df.to_numpy()
