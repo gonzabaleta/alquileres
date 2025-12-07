@@ -1,3 +1,34 @@
+"""
+Configuraciones de Pipelines - Ganadoras del Análisis de Preprocessing
+
+Este archivo contiene las 4 configuraciones óptimas identificadas durante
+la experimentación, listas para uso en producción.
+"""
+
+"""
+Uso recomendado:
+
+1. DATASET NORMAL (98.5% del mercado, sin outliers extremos):
+   - XGBoost / Random Forest → TREE_BASED_CONFIG_NORMAL
+   - Ridge / Lasso / ElasticNet → LINEAR_DEEP_LEARNING_CONFIG_NORMAL
+   - Redes Neuronales → LINEAR_DEEP_LEARNING_CONFIG_NORMAL
+
+2. DATASET CON OUTLIERS (dataset original completo):
+   - XGBoost / Random Forest → TREE_BASED_CONFIG_OUTLIERS
+   - Ridge / Lasso / ElasticNet → LINEAR_DEEP_LEARNING_CONFIG_OUTLIERS
+   - Redes Neuronales → LINEAR_DEEP_LEARNING_CONFIG_OUTLIERS
+
+Ejemplo de uso:
+```python
+from src.pipeline import build_feature_pipeline, build_target_pipeline
+from src.config import TREE_BASED_CONFIG_NORMAL
+
+feature_pipeline = build_feature_pipeline(TREE_BASED_CONFIG_NORMAL)
+target_pipeline = build_target_pipeline(TREE_BASED_CONFIG_NORMAL)
+```
+"""
+
+
 from src.pipeline import (
     PipelineConfig,
     FeatureCreatorParams,
@@ -6,107 +37,274 @@ from src.pipeline import (
 )
 from src.utils import COLS
 
-# Parámetros compartidos en varias configuraciones
-COLS_TO_DROP = [COLS.SUP_TOTAL]
-FEATURE_CREATOR_PARAMS = FeatureCreatorParams(
-    add_amenities_score=True,
-    add_room_density=True,
-    add_bath_bed_ratio=True,
-    add_uncovered_pct=True,
-)
-OUTLIER_CLIPPER_PARAMS = OutlierClipperParams(
-    cols_to_clip=[
+
+# ============================================================
+# CONFIGURACIONES PARA DATASET NORMAL (98.5% sin outliers extremos)
+# ============================================================
+
+# Para modelos basados en árboles (XGBoost, Random Forest, etc.)
+TREE_BASED_CONFIG_NORMAL = PipelineConfig(
+    cols_to_drop=[COLS.SUP_TOTAL],
+    feature_creator_params=FeatureCreatorParams(
+        add_amenities_score=True,
+        add_room_density=True,
+        add_bath_bed_ratio=True,
+        add_uncovered_pct=True,
+    ),
+    median_imputer_cols=[
+        COLS.ID_GRID,
         COLS.SUP_CONSTR,
+        COLS.DORMITORIOS,
+        COLS.BANOS,
+        COLS.AMBIENTES,
+        COLS.COCHERAS,
+        COLS.LONGITUD,
+        COLS.LATITUD,
+        COLS.ANIO,
+        COLS.MES,
         COLS.SUP_DESCUBIERTA,
+        COLS.SUP_DESCUBIERTA_PCT,
+        COLS.AMENITIES_SCORE,
+        COLS.M2_POR_AMBIENTE,
+        COLS.BANOS_POR_DORMITORIO,
+        COLS.ANTIGUEDAD,
+    ],
+    outlier_clipper_params=OutlierClipperParams(cols_to_clip=[], upper_pct=1),
+    mode_imputation_cols=[COLS.CIUDAD, COLS.PROVINCIA, COLS.BARRIO, COLS.CONDICION],
+    log_cols=[],  # Árboles no necesitan transformación de features
+    std_cols=[],  # Árboles no necesitan escalado
+    boolean_imputer_cols=[
+        COLS.AMOBLADO,
+        COLS.BUSINESS,
+        COLS.GIMNASIO,
+        COLS.LAUNDRY,
+        COLS.CALEFACCION,
+        COLS.AIRE,
+        COLS.RECEPCION,
+        COLS.ESTACIONAMIENTO,
+        COLS.JACUZZI,
+        COLS.SEGURIDAD,
+        COLS.PILETA,
+        COLS.TENNIS,
+        "SUM",
+    ],
+    one_hot_cols=[COLS.PROVINCIA, COLS.CONDICION, COLS.ANIO],
+    target_params=TargetParams(
+        target_clipper_params=OutlierClipperParams(cols_to_clip=[], upper_pct=1),
+        log_transform=False,  # Sin log target
+    ),
+    ordinal_cols=[COLS.BARRIO, COLS.CIUDAD, COLS.MES],
+    target_encode_cols=[],
+)
+
+
+# Columnas numéricas para escalar (requeridas por modelos lineales y redes neuronales)
+NUMERIC_COLS_FOR_SCALING = [
+    COLS.SUP_CONSTR,
+    COLS.ANTIGUEDAD,
+    COLS.DORMITORIOS,
+    COLS.BANOS,
+    COLS.AMBIENTES,
+    COLS.COCHERAS,
+    COLS.LONGITUD,
+    COLS.LATITUD,
+    COLS.ANIO,
+    COLS.MES,
+    COLS.ID_GRID,
+]
+
+
+# Para modelos lineales y Deep Learning (Regresión Lineal, Ridge, Redes Neuronales)
+LINEAR_DEEP_LEARNING_CONFIG_NORMAL = PipelineConfig(
+    cols_to_drop=[COLS.SUP_TOTAL],
+    feature_creator_params=FeatureCreatorParams(
+        add_amenities_score=True,
+        add_room_density=True,
+        add_bath_bed_ratio=True,
+        add_uncovered_pct=True,
+    ),
+    median_imputer_cols=[
+        COLS.ID_GRID,
+        COLS.SUP_CONSTR,
         COLS.ANTIGUEDAD,
         COLS.DORMITORIOS,
         COLS.BANOS,
         COLS.AMBIENTES,
         COLS.COCHERAS,
+        COLS.LONGITUD,
+        COLS.LATITUD,
+        COLS.ANIO,
+        COLS.MES,
+        COLS.SUP_DESCUBIERTA,
+        COLS.SUP_DESCUBIERTA_PCT,
+        COLS.AMENITIES_SCORE,
+        COLS.M2_POR_AMBIENTE,
+        COLS.BANOS_POR_DORMITORIO,
     ],
-    upper_pct=0.98,
-)
-MEDIAN_IMPUTER_COLS = [
-    COLS.ANTIGUEDAD,
-    COLS.SUP_DESCUBIERTA,
-    COLS.SUP_CONSTR,
-    COLS.SUP_DESCUBIERTA_PCT,
-    COLS.M2_POR_AMBIENTE,
-    COLS.BANOS_POR_DORMITORIO,
-    COLS.AMENITIES_SCORE,
-]
-MODE_IMPUTATION_COLS = [COLS.AMBIENTES, COLS.DORMITORIOS, COLS.BANOS, COLS.COCHERAS]
-LOG_STD_COLS = [COLS.SUP_CONSTR, COLS.SUP_DESCUBIERTA, COLS.ANTIGUEDAD]
-STD_ONLY_COLS = [COLS.LONGITUD, COLS.LATITUD]
-BOOLEAN_IMPUTER_COLS = [
-    COLS.AMOBLADO,
-    COLS.GIMNASIO,
-    COLS.LAUNDRY,
-    COLS.CALEFACCION,
-    COLS.AIRE,
-    COLS.SEGURIDAD,
-    COLS.PILETA,
-    COLS.TENNIS,
-    COLS.RECEPCION,
-    COLS.BUSINESS,
-    COLS.ESTACIONAMIENTO,
-    "SUM",
-    COLS.JACUZZI,
-]
-ONE_HOT_COLS = [COLS.PROVINCIA, COLS.CONDICION, COLS.ANIO]
-
-# Pipeline de preprocesamiento para decision trees
-decision_trees_pipeline_config = PipelineConfig(
-    cols_to_drop=COLS_TO_DROP,
-    feature_creator_params=FEATURE_CREATOR_PARAMS,
-    median_imputer_cols=MEDIAN_IMPUTER_COLS,
-    outlier_clipper_params=OUTLIER_CLIPPER_PARAMS,
-    mode_imputation_cols=MODE_IMPUTATION_COLS,
-    log_std_cols=[],  # Trees no necesitan estandarización
-    std_only_cols=[],
-    boolean_imputer_cols=BOOLEAN_IMPUTER_COLS,
-    one_hot_cols=ONE_HOT_COLS,
+    outlier_clipper_params=OutlierClipperParams(cols_to_clip=[], upper_pct=1),
+    mode_imputation_cols=[COLS.CIUDAD, COLS.PROVINCIA, COLS.CONDICION],
+    log_cols=[COLS.SUP_CONSTR, COLS.ANTIGUEDAD],  # Normalizar distribuciones sesgadas
+    std_cols=[
+        col
+        for col in NUMERIC_COLS_FOR_SCALING
+        if col not in [COLS.SUP_CONSTR, COLS.ANTIGUEDAD]
+    ]
+    + [
+        COLS.SUP_DESCUBIERTA_PCT,
+        COLS.AMENITIES_SCORE,
+        COLS.M2_POR_AMBIENTE,
+        COLS.BANOS_POR_DORMITORIO,
+    ],
+    boolean_imputer_cols=[
+        COLS.AMOBLADO,
+        COLS.BUSINESS,
+        COLS.GIMNASIO,
+        COLS.LAUNDRY,
+        COLS.CALEFACCION,
+        COLS.AIRE,
+        COLS.RECEPCION,
+        COLS.ESTACIONAMIENTO,
+        COLS.JACUZZI,
+        COLS.SEGURIDAD,
+        COLS.PILETA,
+        COLS.TENNIS,
+        "SUM",
+    ],
+    one_hot_cols=[COLS.PROVINCIA, COLS.CONDICION],  # One-hot para baja cardinalidad
     target_params=TargetParams(
-        target_clipper_params=OutlierClipperParams(
-            cols_to_clip=[COLS.TARGET], upper_pct=1  # no clipeamos target
-        ),
-        log_transform=False,
+        target_clipper_params=OutlierClipperParams(cols_to_clip=[], upper_pct=1),
+        log_transform=False,  # Sin log target en dataset normal
     ),
-    ordinal_cols=[COLS.BARRIO, COLS.CIUDAD],
-    target_encode_cols=[COLS.ID_GRID],
+    ordinal_cols=[COLS.MES],
+    target_encode_cols=[
+        COLS.ID_GRID,
+        COLS.BARRIO,
+        COLS.CIUDAD,
+    ],  # Para alta cardinalidad
 )
 
-# Definimos las columnas que necesitan escalado para modelos lineales (Todas las numéricas)
-LINEAR_STD_COLS = [
-    COLS.LONGITUD,
-    COLS.LATITUD,
-    COLS.SUP_DESCUBIERTA_PCT,
-    COLS.M2_POR_AMBIENTE,
-    COLS.BANOS_POR_DORMITORIO,
-    COLS.AMENITIES_SCORE,
-    COLS.AMBIENTES,
-    COLS.DORMITORIOS,
-    COLS.BANOS,
-    COLS.COCHERAS,
-]
 
-# Modelos lineales van a tener el target transformado y clipeado
-linear_models_pipeline_config = PipelineConfig(
-    cols_to_drop=COLS_TO_DROP,
-    feature_creator_params=FEATURE_CREATOR_PARAMS,
-    median_imputer_cols=MEDIAN_IMPUTER_COLS,
-    outlier_clipper_params=OUTLIER_CLIPPER_PARAMS,
-    mode_imputation_cols=MODE_IMPUTATION_COLS,
-    log_std_cols=LOG_STD_COLS,
-    std_only_cols=LINEAR_STD_COLS,
-    boolean_imputer_cols=BOOLEAN_IMPUTER_COLS,
-    one_hot_cols=ONE_HOT_COLS,
-    target_params=TargetParams(
-        target_clipper_params=OutlierClipperParams(
-            cols_to_clip=[], upper_pct=0.98  # clipeamos outliers en target
-        ),
-        log_transform=True,
+# ============================================================
+# CONFIGURACIONES PARA DATASET CON OUTLIERS (original completo)
+# ============================================================
+
+# Para modelos basados en árboles con outliers extremos
+TREE_BASED_CONFIG_OUTLIERS = PipelineConfig(
+    cols_to_drop=[COLS.SUP_TOTAL],
+    feature_creator_params=FeatureCreatorParams(
+        add_amenities_score=True,
+        add_room_density=True,
+        add_bath_bed_ratio=True,
+        add_uncovered_pct=True,
     ),
-    ordinal_cols=[],
-    target_encode_cols=[COLS.BARRIO, COLS.CIUDAD, COLS.ID_GRID],
+    median_imputer_cols=[
+        COLS.ID_GRID,
+        COLS.SUP_CONSTR,
+        COLS.DORMITORIOS,
+        COLS.BANOS,
+        COLS.AMBIENTES,
+        COLS.COCHERAS,
+        COLS.LONGITUD,
+        COLS.LATITUD,
+        COLS.ANIO,
+        COLS.MES,
+        COLS.SUP_DESCUBIERTA,
+        COLS.SUP_DESCUBIERTA_PCT,
+        COLS.AMENITIES_SCORE,
+        COLS.M2_POR_AMBIENTE,
+        COLS.BANOS_POR_DORMITORIO,
+        COLS.ANTIGUEDAD,
+    ],
+    outlier_clipper_params=OutlierClipperParams(cols_to_clip=[], upper_pct=1),
+    mode_imputation_cols=[COLS.CIUDAD, COLS.PROVINCIA, COLS.BARRIO, COLS.CONDICION],
+    log_cols=[],
+    std_cols=[],
+    boolean_imputer_cols=[
+        COLS.AMOBLADO,
+        COLS.BUSINESS,
+        COLS.GIMNASIO,
+        COLS.LAUNDRY,
+        COLS.CALEFACCION,
+        COLS.AIRE,
+        COLS.RECEPCION,
+        COLS.ESTACIONAMIENTO,
+        COLS.JACUZZI,
+        COLS.SEGURIDAD,
+        COLS.PILETA,
+        COLS.TENNIS,
+        "SUM",
+    ],
+    one_hot_cols=[COLS.PROVINCIA, COLS.CONDICION, COLS.ANIO],
+    target_params=TargetParams(
+        target_clipper_params=OutlierClipperParams(cols_to_clip=[], upper_pct=1),
+        log_transform=True,  # Log target para comprimir escala
+    ),
+    ordinal_cols=[COLS.BARRIO, COLS.CIUDAD, COLS.MES],
+    target_encode_cols=[],
+)
+
+
+# Para modelos lineales y Deep Learning con outliers extremos
+LINEAR_DEEP_LEARNING_CONFIG_OUTLIERS = PipelineConfig(
+    cols_to_drop=[COLS.SUP_TOTAL],
+    feature_creator_params=FeatureCreatorParams(
+        add_amenities_score=True,
+        add_room_density=True,
+        add_bath_bed_ratio=True,
+        add_uncovered_pct=True,
+    ),
+    median_imputer_cols=[
+        COLS.ID_GRID,
+        COLS.SUP_CONSTR,
+        COLS.ANTIGUEDAD,
+        COLS.DORMITORIOS,
+        COLS.BANOS,
+        COLS.AMBIENTES,
+        COLS.COCHERAS,
+        COLS.LONGITUD,
+        COLS.LATITUD,
+        COLS.ANIO,
+        COLS.MES,
+        COLS.SUP_DESCUBIERTA,
+        COLS.SUP_DESCUBIERTA_PCT,
+        COLS.AMENITIES_SCORE,
+        COLS.M2_POR_AMBIENTE,
+        COLS.BANOS_POR_DORMITORIO,
+    ],
+    outlier_clipper_params=OutlierClipperParams(cols_to_clip=[], upper_pct=1),
+    mode_imputation_cols=[COLS.CIUDAD, COLS.PROVINCIA, COLS.CONDICION],
+    log_cols=[COLS.SUP_CONSTR, COLS.ANTIGUEDAD],
+    std_cols=[
+        col
+        for col in NUMERIC_COLS_FOR_SCALING
+        if col not in [COLS.SUP_CONSTR, COLS.ANTIGUEDAD]
+    ]
+    + [
+        COLS.SUP_DESCUBIERTA_PCT,
+        COLS.AMENITIES_SCORE,
+        COLS.M2_POR_AMBIENTE,
+        COLS.BANOS_POR_DORMITORIO,
+    ],
+    boolean_imputer_cols=[
+        COLS.AMOBLADO,
+        COLS.BUSINESS,
+        COLS.GIMNASIO,
+        COLS.LAUNDRY,
+        COLS.CALEFACCION,
+        COLS.AIRE,
+        COLS.RECEPCION,
+        COLS.ESTACIONAMIENTO,
+        COLS.JACUZZI,
+        COLS.SEGURIDAD,
+        COLS.PILETA,
+        COLS.TENNIS,
+        "SUM",
+    ],
+    one_hot_cols=[COLS.PROVINCIA, COLS.CONDICION],
+    target_params=TargetParams(
+        target_clipper_params=OutlierClipperParams(cols_to_clip=[], upper_pct=1),
+        log_transform=True,  # Log target para comprimir escala
+    ),
+    ordinal_cols=[COLS.MES],
+    target_encode_cols=[COLS.ID_GRID, COLS.BARRIO, COLS.CIUDAD],
 )

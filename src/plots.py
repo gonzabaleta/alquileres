@@ -2,9 +2,9 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib.container import BarContainer
 import math
 from typing import List, Tuple, Dict, Union
-import contextily as cx
 import contextily as cx
 from sklearn.tree import plot_tree
 from sklearn.metrics import (
@@ -740,3 +740,85 @@ def plot_model_comparison(models_predictions: Dict[str, List]):
     plt.show()
 
     return df_metrics
+
+
+def plot_cv_results(results_df: pd.DataFrame, baseline_name: str = "Baseline", vertical_layout: bool = True):
+    """
+    Genera dos gráficos de barras verticales para visualizar los resultados de CV.
+    Estilo consistente con plot_model_comparison.
+
+    Args:
+        results_df (pd.DataFrame): DataFrame con los resultados.
+        baseline_name (str): Nombre de la configuración a usar como línea de referencia.
+        vertical_layout (bool): Si True, apila gráficos verticalmente (2 filas, 1 col).
+                                Si False, coloca gráficos lado a lado (1 fila, 2 cols).
+    """
+    if vertical_layout:
+        fig, axes = plt.subplots(2, 1, figsize=(14, 18))
+    else:
+        fig, axes = plt.subplots(1, 2, figsize=(18, 7))
+
+    metrics = [("rmse", "Avg RMSE"), ("mae", "Avg MAE")]
+
+    # Crear una paleta fija mapeando cada configuración a un color específico
+    # Esto asegura que "Config A" tenga el mismo color en ambos gráficos sin importar el orden
+    unique_configs = results_df.index.unique()
+    colors = sns.color_palette("viridis", len(unique_configs))
+    palette_dict = dict(zip(unique_configs, colors))
+
+    for i, (metric_key, title) in enumerate(metrics):
+        ax = axes[i]
+        # Ordenar data por la métrica actual (Ascendente: menor es mejor)
+        data_sorted = results_df.sort_values(by=f"{metric_key}_mean")
+
+        sns.barplot(
+            data=data_sorted,
+            x=data_sorted.index,
+            y=f"{metric_key}_mean",
+            hue=data_sorted.index,
+            legend=False,
+            ax=ax,
+            palette=palette_dict,
+            edgecolor="black",
+        )
+
+        # Barras de error verticales (Std Dev)
+        ax.errorbar(
+            x=np.arange(len(data_sorted)),
+            y=data_sorted[f"{metric_key}_mean"],
+            yerr=data_sorted[f"{metric_key}_std"],
+            fmt="none",
+            c="black",
+            capsize=5,
+            linewidth=1.5,
+        )
+
+        # Baseline Line (Referencia)
+        if baseline_name in results_df.index:
+            baseline_val = results_df.loc[baseline_name, f"{metric_key}_mean"]
+            ax.axhline(
+                baseline_val,
+                color="red",
+                linestyle="--",
+                linewidth=1.5,
+                label="Baseline",
+            )
+            ax.legend()
+        else:
+            print(f"Warning: Baseline '{baseline_name}' not found in results.")
+
+        ax.set_title(title, fontsize=14)
+        ax.set_ylabel(title)
+        ax.set_xlabel("Configuración")
+        ax.tick_params(axis="x", rotation=45)
+        # Alinear las etiquetas a la derecha para mejor legibilidad con rotación
+        for label in ax.get_xticklabels():
+            label.set_ha("right")
+
+        # Etiquetas de valor sobre las barras
+        for container in ax.containers:
+            if isinstance(container, BarContainer):
+                ax.bar_label(container, fmt="%.0f", padding=5, fontsize=10)
+
+    plt.tight_layout()
+    plt.show()

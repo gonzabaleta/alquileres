@@ -1,7 +1,24 @@
+"""
+
+Este módulo contiene transformadores personalizados para preprocesamiento
+
+Transformadores principales:
+- ColumnDropper: Elimina columnas específicas del DataFrame
+- FeatureCreator: Crea features derivadas (amenities_score, ratios, densidades, etc.)
+- OutlierClipper: Clipea outliers usando percentiles
+- get_log_transformer(): Factory function para transformación logarítmica
+
+Estos transformadores son compatibles con sklearn.pipeline.Pipeline y se usan
+en las funciones build_feature_pipeline() y build_target_pipeline() del módulo
+src.pipeline.
+"""
+
 import pandas as pd
 import warnings
+import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
-from typing import List, TypedDict
+from sklearn.preprocessing import FunctionTransformer
+from typing import List
 from src.utils import COLS
 
 
@@ -31,13 +48,11 @@ class FeatureCreator(BaseEstimator, TransformerMixin):
         add_room_density: bool = True,
         add_bath_bed_ratio: bool = True,
         add_uncovered_pct: bool = True,
-        add_m2_valorizados: bool = True,
     ):
         self.add_amenities_score = add_amenities_score
         self.add_room_density = add_room_density
         self.add_bath_bed_ratio = add_bath_bed_ratio
         self.add_uncovered_pct = add_uncovered_pct
-        self.add_m2_valorizados = add_m2_valorizados
 
         self.amenities_list = [
             COLS.AMOBLADO,
@@ -69,17 +84,28 @@ class FeatureCreator(BaseEstimator, TransformerMixin):
             if self.add_uncovered_pct:
                 # Creamos la col descubierta primero
                 col_descubierta = COLS.SUP_DESCUBIERTA
-                X_df[col_descubierta] = (X_df[COLS.SUP_TOTAL] - X_df[COLS.SUP_CONSTR]).clip(
-                    lower=0
-                )
+                X_df[col_descubierta] = (
+                    X_df[COLS.SUP_TOTAL] - X_df[COLS.SUP_CONSTR]
+                ).clip(lower=0)
 
-                total_safe = X_df[COLS.SUP_TOTAL].replace(0, pd.NA).fillna(1).infer_objects(copy=False)
+                # Porcentaje de superficie descubierta:
+                total_safe = (
+                    X_df[COLS.SUP_TOTAL]
+                    .replace(0, pd.NA)
+                    .fillna(1)
+                    .infer_objects(copy=False)
+                )
                 X_df[COLS.SUP_DESCUBIERTA_PCT] = X_df[col_descubierta] / total_safe
 
             # 2. Densidad (M2 por Ambiente)
             if self.add_room_density and COLS.AMBIENTES in X_df.columns:
-                amb_safe = X_df[COLS.AMBIENTES].replace(0, pd.NA).fillna(1).infer_objects(copy=False)
-                X_df[COLS.M2_POR_AMBIENTE] = X_df[COLS.SUP_TOTAL] / amb_safe
+                amb_safe = (
+                    X_df[COLS.AMBIENTES]
+                    .replace(0, pd.NA)
+                    .fillna(1)
+                    .infer_objects(copy=False)
+                )
+                X_df[COLS.M2_POR_AMBIENTE] = X_df[COLS.SUP_CONSTR] / amb_safe
 
             # 3. Baños por Dormitorio
             if (
@@ -87,14 +113,29 @@ class FeatureCreator(BaseEstimator, TransformerMixin):
                 and COLS.BANOS in X_df.columns
                 and COLS.DORMITORIOS in X_df.columns
             ):
-                dorm_safe = X_df[COLS.DORMITORIOS].replace(0, pd.NA).fillna(1).infer_objects(copy=False)
+                dorm_safe = (
+                    X_df[COLS.DORMITORIOS]
+                    .replace(0, pd.NA)
+                    .fillna(1)
+                    .infer_objects(copy=False)
+                )
                 X_df[COLS.BANOS_POR_DORMITORIO] = X_df[COLS.BANOS] / dorm_safe
 
             # 4. Amenities Score
             if self.add_amenities_score:
                 valid_amenities = [c for c in self.amenities_list if c in X_df.columns]
                 if valid_amenities:
-                    X_df[COLS.AMENITIES_SCORE] = X_df[valid_amenities].sum(axis=1)
+                    # Asegurar que sean numéricos (True=1, False=0), tratando errores como NaN
+                    amenities_numeric = X_df[valid_amenities].apply(
+                        pd.to_numeric, errors="coerce"
+                    )
+                    X_df[COLS.AMENITIES_SCORE] = amenities_numeric.sum(
+                        axis=1, min_count=0
+                    ).astype(float)
+
+        # Safety Check: features numéricas deben ser float
+        if COLS.AMENITIES_SCORE in X_df.columns:
+            X_df[COLS.AMENITIES_SCORE] = X_df[COLS.AMENITIES_SCORE].astype(float)
 
         return X_df
 
@@ -108,7 +149,7 @@ class OutlierClipper(BaseEstimator, TransformerMixin):
     def __init__(self, cols_to_clip: List[str], upper_pct: float):
         self.cols_to_clip = cols_to_clip
         self.upper_pct = upper_pct
-        self.limits_ = {}
+        self.limits_ = {}  # limites aprendidos en train a partir de los cuales clipear
 
     def fit(self, X, y=None):
         # Si es array (viene de TransformedTargetRegressor), lo convertimos a DF
@@ -172,11 +213,11 @@ class MedianImputer(BaseEstimator, TransformerMixin):
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         X_copy = X.copy()
-        
+
         # Silenciamos el FutureWarning de pandas sobre downcasting
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=FutureWarning)
-            
+
             for col in self.cols_to_impute:
                 if col in X_copy.columns:
                     # creamos flag indicando que la columna fue imputada
@@ -186,5 +227,18 @@ class MedianImputer(BaseEstimator, TransformerMixin):
                     # imputamos la mediana.
                     median_val = self.medians_.get(col)
                     if median_val is not None:
-                        X_copy[col] = X_copy[col].fillna(median_val).infer_objects(copy=False)
+                        X_copy[col] = (
+                            X_copy[col].fillna(median_val).infer_objects(copy=False)
+                        )
         return X_copy
+
+
+def get_log_transformer() -> FunctionTransformer:
+    """Retorna un FunctionTransformer log1p/expm1"""
+    return FunctionTransformer(
+        np.log1p,
+        inverse_func=np.expm1,
+        check_inverse=False,
+        validate=False,
+        feature_names_out="one-to-one",
+    )

@@ -5,6 +5,8 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 DEV_SET_RAW_PATH = "data/raw/alquiler_AMBA_dev.csv"
 DEV_SET_CLEAN_PATH = "data/processed/dev_set_clean.csv"
+DEV_SET_CLEAN_NORMAL_PATH = "data/processed/dev_set_clean_normal.csv"
+DEV_SET_CLEAN_OUTLIERS_PATH = "data/processed/dev_set_clean_outliers.csv"
 TEST_SET_RAW_PATH = "data/alquiler_AMBA_test.csv"
 TARGET = "precio_pesos_constantes"
 
