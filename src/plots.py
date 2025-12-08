@@ -822,3 +822,189 @@ def plot_cv_results(results_df: pd.DataFrame, baseline_name: str = "Baseline", v
 
     plt.tight_layout()
     plt.show()
+
+
+def plot_grid_search_results(
+    results_df: pd.DataFrame,
+    top_n: int = 10,
+    param_cols: list = None,
+    show_params: bool = False,
+    overfitting_cutoff: float = None,  # % gap máximo permitido (e.g., 50)
+    figsize: tuple = (16, 7)
+):
+    """
+    Visualiza las mejores N configuraciones de un grid search.
+    
+    Args:
+        results_df: DataFrame retornado por grid_search_cv()
+        top_n: Número de mejores configuraciones a mostrar (default: 10)
+        param_cols: Lista de columnas de parámetros a incluir en etiquetas.
+                   Si None, usa todos excepto métricas
+        show_params: 
+            - False (default): Etiquetas simples "Config 1, 2, 3..." + tabla de params debajo
+            - True: Etiquetas con parámetros abreviados (ej: "md=6, lr=0.1")
+        overfitting_cutoff: Si se especifica, descarta modelos con overfit_gap_% > cutoff.
+                           Ejemplo: 50 descarta modelos con gap > 50%
+        figsize: Tamaño de la figura (default: (16, 7))
+    """
+    # Filtrar modelos con overfitting excesivo
+    if overfitting_cutoff is not None:
+        n_original = len(results_df)
+        results_df = results_df[results_df['overfit_gap_%'] <= overfitting_cutoff].copy()
+        n_filtered = len(results_df)
+        n_discarded = n_original - n_filtered
+        
+        if n_discarded > 0:
+            print(f"\n⚠️  Descartados {n_discarded}/{n_original} modelos con overfitting > {overfitting_cutoff}%")
+        
+        if n_filtered == 0:
+            print(f"\n❌ ERROR: Todos los modelos tienen overfitting > {overfitting_cutoff}%")
+            print(f"   Considerá aumentar el cutoff o revisar la configuración del grid search.")
+            return
+    
+    # Tomar top N configuraciones (ordenadas por MAE de test)
+    top_results = results_df.head(top_n).copy()
+    
+    # Identificar columnas de parámetros
+    metric_cols = ['mae_mean', 'mae_std', 'rmse_mean', 'rmse_std',
+                   'train_mae_mean', 'train_mae_std', 'train_rmse_mean', 'train_rmse_std',
+                   'overfit_gap_%']
+    if param_cols is None:
+        param_cols = [col for col in top_results.columns if col not in metric_cols]
+    
+    # Crear etiquetas
+    if show_params:
+        abbrev = {
+            'max_depth': 'md', 'learning_rate': 'lr', 'n_estimators': 'n',
+            'min_child_weight': 'mcw', 'subsample': 'ss', 'colsample_bytree': 'cs',
+            'num_leaves': 'nl', 'min_child_samples': 'mcs',
+            'gamma': 'γ', 'reg_alpha': 'α', 'reg_lambda': 'λ'
+        }
+        labels = []
+        for idx, row in top_results.iterrows():
+            param_strs = []
+            for col in param_cols:
+                short_name = abbrev.get(col, col[:3])
+                value = row[col]
+                if isinstance(value, float):
+                    value = f"{value:.2f}" if value < 1 else f"{value:.0f}"
+                param_strs.append(f"{short_name}={value}")
+            labels.append(f"#{len(labels)+1}\n{', '.join(param_strs[:3])}")
+    else:
+        labels = [f"Config {i+1}" for i in range(len(top_results))]
+    
+    # Crear figura con 2 subplots
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
+    
+    # Ancho de barras y posiciones
+    x_pos = np.arange(len(top_results))
+    bar_width = 0.35
+    
+    # ============================================================
+    # SUBPLOT 1: MAE (Train vs Test)
+    # ============================================================
+    ax_mae = axes[0]
+    
+    # Barras de TRAIN
+    bars_train = ax_mae.bar(
+        x_pos - bar_width/2,
+        top_results['train_mae_mean'],
+        bar_width,
+        label='Train',
+        alpha=0.7,
+        color='skyblue',
+        edgecolor='black',
+        linewidth=1
+    )
+    
+    # Barras de TEST
+    bars_test = ax_mae.bar(
+        x_pos + bar_width/2,
+        top_results['mae_mean'],
+        bar_width,
+        label='Test (CV)',
+        alpha=0.8,
+        color='coral',
+        edgecolor='black',
+        linewidth=1
+    )
+    
+    # Destacar mejor configuración
+    bars_train[0].set_edgecolor('darkgoldenrod')
+    bars_train[0].set_linewidth(2)
+    bars_test[0].set_edgecolor('darkgoldenrod')
+    bars_test[0].set_linewidth(2)
+    
+    ax_mae.set_xlabel('Configuración', fontsize=12, fontweight='bold')
+    ax_mae.set_ylabel('MAE', fontsize=12, fontweight='bold')
+    ax_mae.set_title('MAE - Train vs Test', fontsize=14, fontweight='bold')
+    ax_mae.set_xticks(x_pos)
+    ax_mae.set_xticklabels(labels, rotation=0 if not show_params else 45,
+                           ha='center' if not show_params else 'right', fontsize=10)
+    ax_mae.legend()
+    ax_mae.yaxis.grid(True, linestyle='--', alpha=0.3)
+    ax_mae.set_axisbelow(True)
+    
+    # ============================================================
+    # SUBPLOT 2: RMSE (Train vs Test)
+    # ============================================================
+    ax_rmse = axes[1]
+    
+    # Barras de TRAIN
+    bars_train_rmse = ax_rmse.bar(
+        x_pos - bar_width/2,
+        top_results['train_rmse_mean'],
+        bar_width,
+        label='Train',
+        alpha=0.7,
+        color='skyblue',
+        edgecolor='black',
+        linewidth=1
+    )
+    
+    # Barras de TEST
+    bars_test_rmse = ax_rmse.bar(
+        x_pos + bar_width/2,
+        top_results['rmse_mean'],
+        bar_width,
+        label='Test (CV)',
+        alpha=0.8,
+        color='coral',
+        edgecolor='black',
+        linewidth=1
+    )
+    
+    # Destacar mejor configuración
+    bars_train_rmse[0].set_edgecolor('darkgoldenrod')
+    bars_train_rmse[0].set_linewidth(2)
+    bars_test_rmse[0].set_edgecolor('darkgoldenrod')
+    bars_test_rmse[0].set_linewidth(2)
+    
+    ax_rmse.set_xlabel('Configuración', fontsize=12, fontweight='bold')
+    ax_rmse.set_ylabel('RMSE', fontsize=12, fontweight='bold')
+    ax_rmse.set_title('RMSE - Train vs Test', fontsize=14, fontweight='bold')
+    ax_rmse.set_xticks(x_pos)
+    ax_rmse.set_xticklabels(labels, rotation=0 if not show_params else 45,
+                            ha='center' if not show_params else 'right', fontsize=10)
+    ax_rmse.legend()
+    ax_rmse.yaxis.grid(True, linestyle='--', alpha=0.3)
+    ax_rmse.set_axisbelow(True)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Imprimir tabla de parámetros + overfitting gap
+    if not show_params:
+        print("\n📋 Parámetros de cada configuración:")
+        print("="*90)
+        display_df = top_results.copy()
+        display_df.index = [f"Config {i+1}" for i in range(len(display_df))]
+        # Mostrar solo las columnas más relevantes
+        cols_to_show = param_cols + ['mae_mean', 'train_mae_mean', 'overfit_gap_%']
+        print(display_df[cols_to_show].to_string())
+        
+        print("\n⚠️  Indicador de Overfitting (gap):")
+        print("   < 15%: ✅ Excelente  |  15-30%: ⚠️ Aceptable  |  > 30%: ❌ Overfitting")
+
+
+
