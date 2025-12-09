@@ -1046,3 +1046,219 @@ def plot_learning_curve(
     plt.title(f"Learning Curve - {metric.upper()}", fontsize=12, fontweight="bold")
     plt.legend()
     plt.grid(alpha=0.3)
+
+
+def plot_classifier_results(
+    results_df: pd.DataFrame,
+    top_n: int = 10,
+    figsize: tuple = (16, 18),
+):
+    """
+    Visualiza resultados de classifier_search_cv con 6 subplots (3x2).
+    
+    Args:
+        results_df: DataFrame retornado por classifier_search_cv
+        top_n: Número de mejores configuraciones a mostrar en bar charts
+        figsize: Tamaño de la figura
+    """
+    # Detectar columna de ID
+    id_col = None
+    for potential_id in ["config_id", "id"]:
+        if potential_id in results_df.columns:
+            id_col = potential_id
+            break
+
+    fig, axes = plt.subplots(3, 2, figsize=figsize)
+    
+    # Métricas para bar charts (cada una ordenada por sí misma)
+    # Usar nombres con prefijo test_
+    metrics_config = [
+        ('test_recall', 'Top N por Recall', 'coral'),
+        ('test_f1', 'Top N por F1', 'steelblue'),
+        ('test_avg_precision', 'Top N por Avg Precision', 'mediumseagreen'),
+        ('test_precision', 'Top N por Precision', 'goldenrod'),
+    ]
+    
+    # ============================================================
+    # Bar charts (primeras 4 posiciones)
+    # ============================================================
+    bar_positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
+    
+    for idx, (metric, title, color) in enumerate(metrics_config):
+        row, col = bar_positions[idx]
+        ax = axes[row, col]
+        
+        # Nombre de columna test
+        metric_name = metric.replace('test_', '')
+        
+        # Ordenar por esta métrica y tomar top N
+        top_data = results_df.sort_values(metric, ascending=False).head(top_n)
+        
+        # Labels
+        if id_col:
+            labels = [f"ID {int(r[id_col])}" for _, r in top_data.iterrows()]
+        else:
+            labels = [f"#{i+1}" for i in range(len(top_data))]
+        
+        x_pos = np.arange(len(top_data))
+        
+        bars = ax.bar(x_pos, top_data[metric], color=color, edgecolor='black', linewidth=1, alpha=0.8)
+        
+        # Destacar el mejor
+        bars[0].set_edgecolor('darkred')
+        bars[0].set_linewidth(2.5)
+        
+        ax.set_xlabel("Configuración", fontweight="bold")
+        ax.set_ylabel(metric_name.upper(), fontweight="bold")
+        ax.set_title(title, fontsize=12, fontweight="bold")
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=9)
+        ax.yaxis.grid(True, linestyle="--", alpha=0.3)
+        ax.set_axisbelow(True)
+        
+        # Agregar valores sobre las barras
+        for bar, val in zip(bars, top_data[metric]):
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
+                   f'{val:.3f}', ha='center', va='bottom', fontsize=8)
+
+
+    
+    # ============================================================
+    # Scatter: Precision vs Recall (color = F1)
+    # ============================================================
+    ax = axes[2, 0]
+    scatter = ax.scatter(
+        results_df['test_precision'], 
+        results_df['test_recall'],
+        c=results_df['test_f1'],
+        cmap='RdYlGn',
+        s=50,
+        alpha=0.7,
+        edgecolors='black',
+        linewidth=0.5
+    )
+    plt.colorbar(scatter, ax=ax, label='F1 Score')
+    
+    # Marcar el mejor F1
+    best_f1_idx = results_df['test_f1'].idxmax()
+    best = results_df.loc[best_f1_idx]
+    ax.scatter(best['test_precision'], best['test_recall'], 
+               s=200, facecolors='none', edgecolors='red', linewidth=2.5, label='Best F1')
+    
+    ax.set_xlabel("Precision", fontweight="bold")
+    ax.set_ylabel("Recall", fontweight="bold")
+    ax.set_title("Precision vs Recall (color=F1)", fontsize=12, fontweight="bold")
+    ax.legend()
+    ax.grid(alpha=0.3)
+    
+    # ============================================================
+    # Scatter: ROC-AUC vs F1
+    # ============================================================
+    ax = axes[2, 1]
+    scatter = ax.scatter(
+        results_df['test_roc_auc'], 
+        results_df['test_f1'],
+        c=results_df['test_recall'],
+        cmap='viridis',
+        s=50,
+        alpha=0.7,
+        edgecolors='black',
+        linewidth=0.5
+    )
+    plt.colorbar(scatter, ax=ax, label='Recall')
+    
+    # Marcar el mejor F1
+    ax.scatter(best['test_roc_auc'], best['test_f1'], 
+               s=200, facecolors='none', edgecolors='red', linewidth=2.5, label='Best F1')
+    
+    ax.set_xlabel("ROC-AUC", fontweight="bold")
+    ax.set_ylabel("F1", fontweight="bold")
+    ax.set_title("ROC-AUC vs F1 (color=Recall)", fontsize=12, fontweight="bold")
+    ax.legend()
+    ax.grid(alpha=0.3)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Imprimir resumen del mejor modelo
+    print("\n" + "="*60)
+    print("🏆 MEJOR MODELO (por F1):")
+    print("="*60)
+    print(f"Config ID: {int(best[id_col]) if id_col else 'N/A'}")
+    print(f"F1:        {best['test_f1']:.4f}")
+    print(f"Precision: {best['test_precision']:.4f}")
+    print(f"Recall:    {best['test_recall']:.4f}")
+    print(f"ROC-AUC:   {best['test_roc_auc']:.4f}")
+    print(f"Avg Prec:  {best['test_avg_precision']:.4f}")
+
+
+def plot_classifier_comparison(
+    results_df: pd.DataFrame,
+    metrics: List[str] = ["f1", "recall", "precision"],
+    figsize: Tuple[int, int] = (18, 6),
+    title: str = "Comparación de Modelos de Clasificación",
+):
+    """
+    Genera gráficos de barras para comparar clasificadores en múltiples métricas.
+    Si hay métricas de train, muestra barras agrupadas (Train vs Test).
+
+    Args:
+        results_df: DataFrame retornado por evaluate_classifiers_cv
+        metrics: Lista de métricas a plotear (ej: ['f1', 'recall'])
+        figsize: Tamaño de la figura
+        title: Título general
+    """
+    n_metrics = len(metrics)
+    fig, axes = plt.subplots(1, n_metrics, figsize=figsize)
+    if n_metrics == 1:
+        axes = [axes]
+
+    # Colores
+    test_color = "coral"
+    
+    for i, metric in enumerate(metrics):
+        ax = axes[i]
+        
+        # Ordenar (Mayor es mejor)
+        data = results_df.sort_values(metric, ascending=False)
+        
+        x_pos = np.arange(len(data))
+        model_names = data.index
+
+        # Solo Test
+        bars_test = ax.bar(
+            x_pos, 
+            data[metric], 
+            width=0.6,
+            yerr=data.get(f"{metric}_std"),
+            color=test_color,
+            edgecolor='black',
+            alpha=0.9
+        )
+
+        # Estética
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels(model_names, rotation=45, ha='right', fontweight="bold")
+        ax.set_ylabel(metric.upper(), fontweight="bold")
+        ax.set_title(f"Ranking por {metric.upper()}", fontsize=12, fontweight="bold")
+        ax.grid(axis='y', linestyle='--', alpha=0.3)
+        ax.set_ylim(0, 1.05)
+        ax.set_yticks(np.arange(0, 1.1, 0.1))
+        
+        # Agregar valores
+        for bar, val in zip(bars_test, data[metric]):
+            ax.text(
+                bar.get_x() + bar.get_width()/2, 
+                val + 0.005, 
+                f"{val:.3f}", 
+                ha='center', 
+                va='bottom',
+                fontsize=9, 
+                fontweight='bold',
+                color='darkred'
+            )
+
+    plt.suptitle(title, fontsize=16, fontweight='bold', y=1.05)
+    plt.tight_layout()
+    plt.show()
+
