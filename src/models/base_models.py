@@ -2,7 +2,7 @@ from sklearn.dummy import DummyRegressor
 from sklearn.linear_model import Lasso
 from sklearn.pipeline import Pipeline
 from sklearn.tree import DecisionTreeRegressor
-from xgboost import XGBRegressor
+from xgboost_models import XGBRegressor
 
 
 def get_dummy_model():
