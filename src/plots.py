@@ -861,7 +861,6 @@ def plot_cv_results(
     plt.show()
 
 
-
 def plot_grid_search_results(
     results_df: pd.DataFrame,
     top_n: int = 10,
@@ -1026,47 +1025,18 @@ def plot_learning_curve(
         figsize: Tamaño de la figura (default: (14, 5))
     """
     # Extraer métricas
-    train_metric = evals_result['validation_0'][metric]
-    val_metric = evals_result['validation_1'][metric]
+    train_metric = evals_result["validation_0"][metric]
+    val_metric = evals_result["validation_1"][metric]
 
     epochs = range(1, len(train_metric) + 1)
 
     # Crear figura con 2 subplots
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+    fig = plt.figure(figsize=figsize)
 
-    # ============================================================
-    # 1. Learning curve completa
-    # ============================================================
-    ax1.plot(epochs, train_metric, label='Train', linewidth=2, color='skyblue')
-    ax1.plot(epochs, val_metric, label='Validation', linewidth=2, color='coral')
-    ax1.set_xlabel('Number of Trees (Iterations)', fontweight='bold')
-    ax1.set_ylabel(metric.upper(), fontweight='bold')
-    ax1.set_title(f'Learning Curve - {metric.upper()}', fontsize=12, fontweight='bold')
-    ax1.legend()
-    ax1.grid(alpha=0.3)
-
-    # ============================================================
-    # 2. Zoom últimas iteraciones
-    # ============================================================
-    n_zoom = min(100, len(epochs))
-    ax2.plot(epochs[-n_zoom:], train_metric[-n_zoom:], label='Train', linewidth=2, color='skyblue')
-    ax2.plot(epochs[-n_zoom:], val_metric[-n_zoom:], label='Validation', linewidth=2, color='coral')
-    ax2.set_xlabel('Number of Trees (Iterations)', fontweight='bold')
-    ax2.set_ylabel(metric.upper(), fontweight='bold')
-    ax2.set_title(f'Learning Curve - Last {n_zoom} Trees (Zoom)', fontsize=12, fontweight='bold')
-    ax2.legend()
-    ax2.grid(alpha=0.3)
-
-    plt.tight_layout()
-    plt.show()
-
-    # Métricas finales
-    print("\n📊 RESULTADOS FINALES:")
-    print(f"Train {metric.upper()}: {train_metric[-1]:,.2f}")
-    print(f"Val {metric.upper()}:   {val_metric[-1]:,.2f}")
-    print(f"Gap: {((val_metric[-1] / train_metric[-1]) - 1) * 100:.1f}%")
-
-    # Mejor punto (early stopping óptimo)
-    best_iteration = val_metric.index(min(val_metric))
-    print(f"\n🎯 Early stopping óptimo: {best_iteration + 1} árboles")
-    print(f"Val {metric.upper()} óptimo: {min(val_metric):,.2f}")
+    plt.plot(epochs, train_metric, label="Train", linewidth=2, color="skyblue")
+    plt.plot(epochs, val_metric, label="Validation", linewidth=2, color="coral")
+    plt.xlabel("Number of Trees (Iterations)", fontweight="bold")
+    plt.ylabel(metric.upper(), fontweight="bold")
+    plt.title(f"Learning Curve - {metric.upper()}", fontsize=12, fontweight="bold")
+    plt.legend()
+    plt.grid(alpha=0.3)

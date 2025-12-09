@@ -59,8 +59,8 @@ def evaluate_models_cv(
     models: dict,
     X: pd.DataFrame,
     y: pd.Series,
-    feature_pipeline,
-    target_pipeline,
+    feature_pipeline=None,
+    target_pipeline=None,
     n_splits: int = 5,
     random_state: int = 42,
     verbose: bool = True,
@@ -71,7 +71,8 @@ def evaluate_models_cv(
     Args:
         models: Dict {nombre: modelo_sklearn}
         X, y: Features y target sin transformar
-        feature_pipeline, target_pipeline: Pipelines de transformación
+        feature_pipeline: Pipeline de transformación de features (opcional)
+        target_pipeline: Pipeline de transformación de target (opcional)
         n_splits: Folds para CV (default: 5)
         random_state: Seed (default: 42)
         verbose: Imprimir progreso (default: True)
@@ -90,11 +91,17 @@ def evaluate_models_cv(
         if verbose:
             print(f"Entrenando {model_name}...")
 
-        final_regressor = _build_full_regressor(
-            model, feature_pipeline, target_pipeline
-        )
+        # Si no hay pipelines, usar el modelo directamente
+        if feature_pipeline is None and target_pipeline is None:
+            final_model = model
+        else:
+            # Si hay pipelines, envolver con _build_full_regressor
+            final_model = _build_full_regressor(
+                model, feature_pipeline, target_pipeline
+            )
+        
         cv_results = cross_validate(
-            final_regressor, X, y, cv=cv, scoring=scoring, n_jobs=-1,
+            final_model, X, y, cv=cv, scoring=scoring, n_jobs=-1,
             return_train_score=True
         )
         results[model_name] = _extract_cv_metrics(cv_results)
@@ -109,6 +116,7 @@ def evaluate_models_cv(
 
     results_df = pd.DataFrame(results).T
     return results_df.sort_values("mae_mean")
+
 
 
 @contextmanager
