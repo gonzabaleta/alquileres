@@ -35,8 +35,6 @@ def get_base_xgboost(preprocessor):
                 "regressor",
                 XGBRegressor(
                     n_estimators=500,
-                    max_depth=10,
-                    learning_rate=0.1,
                     random_state=42,
                     n_jobs=-1,
                 ),

@@ -742,10 +742,14 @@ def plot_model_comparison(models_predictions: Dict[str, List]):
     return df_metrics
 
 
-def plot_cv_results(results_df: pd.DataFrame, baseline_name: str = "Baseline", vertical_layout: bool = True):
+def plot_cv_results(
+    results_df: pd.DataFrame,
+    baseline_name: str = "Baseline",
+    vertical_layout: bool = True,
+):
     """
     Genera dos gráficos de barras verticales para visualizar los resultados de CV.
-    Estilo consistente con plot_model_comparison.
+    Si hay métricas de train, muestra barras agrupadas (train vs test).
 
     Args:
         results_df (pd.DataFrame): DataFrame con los resultados.
@@ -753,6 +757,9 @@ def plot_cv_results(results_df: pd.DataFrame, baseline_name: str = "Baseline", v
         vertical_layout (bool): Si True, apila gráficos verticalmente (2 filas, 1 col).
                                 Si False, coloca gráficos lado a lado (1 fila, 2 cols).
     """
+    # Detectar si hay métricas de train
+    has_train_metrics = "train_mae_mean" in results_df.columns
+
     if vertical_layout:
         fig, axes = plt.subplots(2, 1, figsize=(14, 18))
     else:
@@ -771,27 +778,70 @@ def plot_cv_results(results_df: pd.DataFrame, baseline_name: str = "Baseline", v
         # Ordenar data por la métrica actual (Ascendente: menor es mejor)
         data_sorted = results_df.sort_values(by=f"{metric_key}_mean")
 
-        sns.barplot(
-            data=data_sorted,
-            x=data_sorted.index,
-            y=f"{metric_key}_mean",
-            hue=data_sorted.index,
-            legend=False,
-            ax=ax,
-            palette=palette_dict,
-            edgecolor="black",
-        )
+        x_pos = np.arange(len(data_sorted))
 
-        # Barras de error verticales (Std Dev)
-        ax.errorbar(
-            x=np.arange(len(data_sorted)),
-            y=data_sorted[f"{metric_key}_mean"],
-            yerr=data_sorted[f"{metric_key}_std"],
-            fmt="none",
-            c="black",
-            capsize=5,
-            linewidth=1.5,
-        )
+        if has_train_metrics:
+            # Barras agrupadas: Train vs Test
+            bar_width = 0.35
+
+            # Barras de TRAIN
+            bars_train = ax.bar(
+                x_pos - bar_width / 2,
+                data_sorted[f"train_{metric_key}_mean"],
+                bar_width,
+                label="Train",
+                alpha=0.7,
+                color="skyblue",
+                edgecolor="black",
+                linewidth=1,
+            )
+
+            # Barras de TEST
+            bars_test = ax.bar(
+                x_pos + bar_width / 2,
+                data_sorted[f"{metric_key}_mean"],
+                bar_width,
+                label="Test (CV)",
+                alpha=0.8,
+                color="coral",
+                edgecolor="black",
+                linewidth=1,
+            )
+
+            # Error bars solo para test
+            ax.errorbar(
+                x=x_pos + bar_width / 2,
+                y=data_sorted[f"{metric_key}_mean"],
+                yerr=data_sorted[f"{metric_key}_std"],
+                fmt="none",
+                c="black",
+                capsize=5,
+                linewidth=1.5,
+            )
+
+            ax.legend()
+        else:
+            # Barras simples (solo test)
+            colors = sns.color_palette("viridis", len(data_sorted))
+
+            bars = ax.bar(
+                x_pos,
+                data_sorted[f"{metric_key}_mean"],
+                color=colors,
+                edgecolor="black",
+                linewidth=1,
+            )
+
+            # Barras de error
+            ax.errorbar(
+                x=x_pos,
+                y=data_sorted[f"{metric_key}_mean"],
+                yerr=data_sorted[f"{metric_key}_std"],
+                fmt="none",
+                c="black",
+                capsize=5,
+                linewidth=1.5,
+            )
 
         # Baseline Line (Referencia)
         if baseline_name in results_df.index:
@@ -804,21 +854,14 @@ def plot_cv_results(results_df: pd.DataFrame, baseline_name: str = "Baseline", v
                 label="Baseline",
             )
             ax.legend()
-        else:
-            print(f"Warning: Baseline '{baseline_name}' not found in results.")
 
-        ax.set_title(title, fontsize=14)
+        ax.set_title(title, fontsize=14, fontweight="bold")
         ax.set_ylabel(title)
         ax.set_xlabel("Configuración")
-        ax.tick_params(axis="x", rotation=45)
-        # Alinear las etiquetas a la derecha para mejor legibilidad con rotación
-        for label in ax.get_xticklabels():
-            label.set_ha("right")
-
-        # Etiquetas de valor sobre las barras
-        for container in ax.containers:
-            if isinstance(container, BarContainer):
-                ax.bar_label(container, fmt="%.0f", padding=5, fontsize=10)
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels(data_sorted.index, rotation=45, ha="right")
+        ax.yaxis.grid(True, linestyle="--", alpha=0.3)
+        ax.set_axisbelow(True)
 
     plt.tight_layout()
     plt.show()
@@ -827,184 +870,179 @@ def plot_cv_results(results_df: pd.DataFrame, baseline_name: str = "Baseline", v
 def plot_grid_search_results(
     results_df: pd.DataFrame,
     top_n: int = 10,
-    param_cols: list = None,
-    show_params: bool = False,
-    overfitting_cutoff: float = None,  # % gap máximo permitido (e.g., 50)
-    figsize: tuple = (16, 7)
+    figsize: tuple = (16, 7),
 ):
     """
     Visualiza las mejores N configuraciones de un grid search.
-    
+
+    MAE plot muestra top N por MAE, RMSE plot muestra top N por RMSE.
+
     Args:
         results_df: DataFrame retornado por grid_search_cv()
         top_n: Número de mejores configuraciones a mostrar (default: 10)
-        param_cols: Lista de columnas de parámetros a incluir en etiquetas.
-                   Si None, usa todos excepto métricas
-        show_params: 
-            - False (default): Etiquetas simples "Config 1, 2, 3..." + tabla de params debajo
-            - True: Etiquetas con parámetros abreviados (ej: "md=6, lr=0.1")
-        overfitting_cutoff: Si se especifica, descarta modelos con overfit_gap_% > cutoff.
-                           Ejemplo: 50 descarta modelos con gap > 50%
         figsize: Tamaño de la figura (default: (16, 7))
     """
-    # Filtrar modelos con overfitting excesivo
-    if overfitting_cutoff is not None:
-        n_original = len(results_df)
-        results_df = results_df[results_df['overfit_gap_%'] <= overfitting_cutoff].copy()
-        n_filtered = len(results_df)
-        n_discarded = n_original - n_filtered
-        
-        if n_discarded > 0:
-            print(f"\n⚠️  Descartados {n_discarded}/{n_original} modelos con overfitting > {overfitting_cutoff}%")
-        
-        if n_filtered == 0:
-            print(f"\n❌ ERROR: Todos los modelos tienen overfitting > {overfitting_cutoff}%")
-            print(f"   Considerá aumentar el cutoff o revisar la configuración del grid search.")
-            return
-    
-    # Tomar top N configuraciones (ordenadas por MAE de test)
-    top_results = results_df.head(top_n).copy()
-    
+    # Top N por MAE y por RMSE (pueden ser diferentes)
+    top_by_mae = results_df.sort_values("mae_mean").head(top_n).copy()
+    top_by_rmse = results_df.sort_values("rmse_mean").head(top_n).copy()
+
     # Identificar columnas de parámetros
-    metric_cols = ['mae_mean', 'mae_std', 'rmse_mean', 'rmse_std',
-                   'train_mae_mean', 'train_mae_std', 'train_rmse_mean', 'train_rmse_std',
-                   'overfit_gap_%']
-    if param_cols is None:
-        param_cols = [col for col in top_results.columns if col not in metric_cols]
-    
-    # Crear etiquetas
-    if show_params:
-        abbrev = {
-            'max_depth': 'md', 'learning_rate': 'lr', 'n_estimators': 'n',
-            'min_child_weight': 'mcw', 'subsample': 'ss', 'colsample_bytree': 'cs',
-            'num_leaves': 'nl', 'min_child_samples': 'mcs',
-            'gamma': 'γ', 'reg_alpha': 'α', 'reg_lambda': 'λ'
-        }
-        labels = []
-        for idx, row in top_results.iterrows():
-            param_strs = []
-            for col in param_cols:
-                short_name = abbrev.get(col, col[:3])
-                value = row[col]
-                if isinstance(value, float):
-                    value = f"{value:.2f}" if value < 1 else f"{value:.0f}"
-                param_strs.append(f"{short_name}={value}")
-            labels.append(f"#{len(labels)+1}\n{', '.join(param_strs[:3])}")
-    else:
-        labels = [f"Config {i+1}" for i in range(len(top_results))]
-    
+    metric_cols = [
+        "mae_mean",
+        "mae_std",
+        "rmse_mean",
+        "rmse_std",
+        "train_mae_mean",
+        "train_mae_std",
+        "train_rmse_mean",
+        "train_rmse_std",
+        "overfit_gap_%",
+    ]
+    param_cols = [col for col in results_df.columns if col not in metric_cols]
+
+    # Detectar columna de ID
+    id_col = None
+    for potential_id in ["config_id", "id"]:
+        if potential_id in results_df.columns:
+            id_col = potential_id
+            break
+
+    # Crear etiquetas para cada subplot
+    def get_labels(df):
+        if id_col:
+            return [f"ID {int(row[id_col])}" for _, row in df.iterrows()]
+        else:
+            return [f"Config {i+1}" for i in range(len(df))]
+
+    labels_mae = get_labels(top_by_mae)
+    labels_rmse = get_labels(top_by_rmse)
+
     # Crear figura con 2 subplots
     fig, axes = plt.subplots(1, 2, figsize=figsize)
-    
-    # Ancho de barras y posiciones
-    x_pos = np.arange(len(top_results))
+
+    # Ancho de barras
     bar_width = 0.35
-    
+
     # ============================================================
-    # SUBPLOT 1: MAE (Train vs Test)
+    # SUBPLOT 1: MAE (Top N por MAE)
     # ============================================================
     ax_mae = axes[0]
-    
-    # Barras de TRAIN
+    x_pos_mae = np.arange(len(top_by_mae))
+
     bars_train = ax_mae.bar(
-        x_pos - bar_width/2,
-        top_results['train_mae_mean'],
+        x_pos_mae - bar_width / 2,
+        top_by_mae["train_mae_mean"],
         bar_width,
-        label='Train',
+        label="Train",
         alpha=0.7,
-        color='skyblue',
-        edgecolor='black',
-        linewidth=1
+        color="skyblue",
+        edgecolor="black",
+        linewidth=1,
     )
-    
-    # Barras de TEST
+
     bars_test = ax_mae.bar(
-        x_pos + bar_width/2,
-        top_results['mae_mean'],
+        x_pos_mae + bar_width / 2,
+        top_by_mae["mae_mean"],
         bar_width,
-        label='Test (CV)',
+        label="Test (CV)",
         alpha=0.8,
-        color='coral',
-        edgecolor='black',
-        linewidth=1
+        color="coral",
+        edgecolor="black",
+        linewidth=1,
     )
-    
-    # Destacar mejor configuración
-    bars_train[0].set_edgecolor('darkgoldenrod')
+
+    # Destacar mejor
+    bars_train[0].set_edgecolor("darkgoldenrod")
     bars_train[0].set_linewidth(2)
-    bars_test[0].set_edgecolor('darkgoldenrod')
+    bars_test[0].set_edgecolor("darkgoldenrod")
     bars_test[0].set_linewidth(2)
-    
-    ax_mae.set_xlabel('Configuración', fontsize=12, fontweight='bold')
-    ax_mae.set_ylabel('MAE', fontsize=12, fontweight='bold')
-    ax_mae.set_title('MAE - Train vs Test', fontsize=14, fontweight='bold')
-    ax_mae.set_xticks(x_pos)
-    ax_mae.set_xticklabels(labels, rotation=0 if not show_params else 45,
-                           ha='center' if not show_params else 'right', fontsize=10)
+
+    ax_mae.set_xlabel("Configuración", fontsize=12, fontweight="bold")
+    ax_mae.set_ylabel("MAE", fontsize=12, fontweight="bold")
+    ax_mae.set_title(
+        f"Top {top_n} por MAE - Train vs Test", fontsize=14, fontweight="bold"
+    )
+    ax_mae.set_xticks(x_pos_mae)
+    ax_mae.set_xticklabels(labels_mae, rotation=45, ha="right", fontsize=10)
     ax_mae.legend()
-    ax_mae.yaxis.grid(True, linestyle='--', alpha=0.3)
+    ax_mae.yaxis.grid(True, linestyle="--", alpha=0.3)
     ax_mae.set_axisbelow(True)
-    
+
     # ============================================================
-    # SUBPLOT 2: RMSE (Train vs Test)
+    # SUBPLOT 2: RMSE (Top N por RMSE)
     # ============================================================
     ax_rmse = axes[1]
-    
-    # Barras de TRAIN
+    x_pos_rmse = np.arange(len(top_by_rmse))
+
     bars_train_rmse = ax_rmse.bar(
-        x_pos - bar_width/2,
-        top_results['train_rmse_mean'],
+        x_pos_rmse - bar_width / 2,
+        top_by_rmse["train_rmse_mean"],
         bar_width,
-        label='Train',
+        label="Train",
         alpha=0.7,
-        color='skyblue',
-        edgecolor='black',
-        linewidth=1
+        color="skyblue",
+        edgecolor="black",
+        linewidth=1,
     )
-    
-    # Barras de TEST
+
     bars_test_rmse = ax_rmse.bar(
-        x_pos + bar_width/2,
-        top_results['rmse_mean'],
+        x_pos_rmse + bar_width / 2,
+        top_by_rmse["rmse_mean"],
         bar_width,
-        label='Test (CV)',
+        label="Test (CV)",
         alpha=0.8,
-        color='coral',
-        edgecolor='black',
-        linewidth=1
+        color="coral",
+        edgecolor="black",
+        linewidth=1,
     )
-    
-    # Destacar mejor configuración
-    bars_train_rmse[0].set_edgecolor('darkgoldenrod')
+
+    # Destacar mejor
+    bars_train_rmse[0].set_edgecolor("darkgoldenrod")
     bars_train_rmse[0].set_linewidth(2)
-    bars_test_rmse[0].set_edgecolor('darkgoldenrod')
+    bars_test_rmse[0].set_edgecolor("darkgoldenrod")
     bars_test_rmse[0].set_linewidth(2)
-    
-    ax_rmse.set_xlabel('Configuración', fontsize=12, fontweight='bold')
-    ax_rmse.set_ylabel('RMSE', fontsize=12, fontweight='bold')
-    ax_rmse.set_title('RMSE - Train vs Test', fontsize=14, fontweight='bold')
-    ax_rmse.set_xticks(x_pos)
-    ax_rmse.set_xticklabels(labels, rotation=0 if not show_params else 45,
-                            ha='center' if not show_params else 'right', fontsize=10)
+
+    ax_rmse.set_xlabel("Configuración", fontsize=12, fontweight="bold")
+    ax_rmse.set_ylabel("RMSE", fontsize=12, fontweight="bold")
+    ax_rmse.set_title(
+        f"Top {top_n} por RMSE - Train vs Test", fontsize=14, fontweight="bold"
+    )
+    ax_rmse.set_xticks(x_pos_rmse)
+    ax_rmse.set_xticklabels(labels_rmse, rotation=45, ha="right", fontsize=10)
     ax_rmse.legend()
-    ax_rmse.yaxis.grid(True, linestyle='--', alpha=0.3)
+    ax_rmse.yaxis.grid(True, linestyle="--", alpha=0.3)
     ax_rmse.set_axisbelow(True)
-    
+
     plt.tight_layout()
     plt.show()
-    
-    # Imprimir tabla de parámetros + overfitting gap
-    if not show_params:
-        print("\n📋 Parámetros de cada configuración:")
-        print("="*90)
-        display_df = top_results.copy()
-        display_df.index = [f"Config {i+1}" for i in range(len(display_df))]
-        # Mostrar solo las columnas más relevantes
-        cols_to_show = param_cols + ['mae_mean', 'train_mae_mean', 'overfit_gap_%']
-        print(display_df[cols_to_show].to_string())
-        
-        print("\n⚠️  Indicador de Overfitting (gap):")
-        print("   < 15%: ✅ Excelente  |  15-30%: ⚠️ Aceptable  |  > 30%: ❌ Overfitting")
 
 
+def plot_learning_curve(
+    evals_result: dict,
+    metric: str = "rmse",
+    figsize: tuple = (14, 5),
+):
+    """
+    Grafica la learning curve de un modelo XGBoost.
 
+    Args:
+        evals_result: Diccionario retornado por xgb_model.evals_result()
+        metric: Métrica a graficar (default: 'rmse')
+        figsize: Tamaño de la figura (default: (14, 5))
+    """
+    # Extraer métricas
+    train_metric = evals_result["validation_0"][metric]
+    val_metric = evals_result["validation_1"][metric]
+
+    epochs = range(1, len(train_metric) + 1)
+
+    # Crear figura con 2 subplots
+    fig = plt.figure(figsize=figsize)
+
+    plt.plot(epochs, train_metric, label="Train", linewidth=2, color="skyblue")
+    plt.plot(epochs, val_metric, label="Validation", linewidth=2, color="coral")
+    plt.xlabel("Number of Trees (Iterations)", fontweight="bold")
+    plt.ylabel(metric.upper(), fontweight="bold")
+    plt.title(f"Learning Curve - {metric.upper()}", fontsize=12, fontweight="bold")
+    plt.legend()
+    plt.grid(alpha=0.3)

@@ -62,7 +62,12 @@ def evaluate_pipeline_configs(
 
         # Cross-Validation
         cv_results = cross_validate(
-            final_regressor, X, y, cv=cv, scoring=scoring, n_jobs=n_jobs
+            final_regressor,
+            X,
+            y,
+            cv=cv,
+            scoring=scoring,
+            n_jobs=n_jobs,
         )
 
         # Guardar resultados
