@@ -99,7 +99,7 @@ def evaluate_models_cv(
             final_model = _build_full_regressor(
                 model, feature_pipeline, target_pipeline
             )
-        
+
         cv_results = cross_validate(
             final_model, X, y, cv=cv, scoring=scoring, n_jobs=-1,
             return_train_score=True

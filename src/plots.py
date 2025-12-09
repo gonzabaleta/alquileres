@@ -767,6 +767,12 @@ def plot_cv_results(
 
     metrics = [("rmse", "Avg RMSE"), ("mae", "Avg MAE")]
 
+    # Crear una paleta fija mapeando cada configuración a un color específico
+    # Esto asegura que "Config A" tenga el mismo color en ambos gráficos sin importar el orden
+    unique_configs = results_df.index.unique()
+    colors = sns.color_palette("viridis", len(unique_configs))
+    palette_dict = dict(zip(unique_configs, colors))
+
     for i, (metric_key, title) in enumerate(metrics):
         ax = axes[i]
         # Ordenar data por la métrica actual (Ascendente: menor es mejor)
