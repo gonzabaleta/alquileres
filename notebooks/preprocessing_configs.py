@@ -118,7 +118,10 @@ categorical_cols = [
     COLS.PROVINCIA,
     COLS.BARRIO,
     COLS.CONDICION,
-    "SUM",
+    COLS.SUM,
+    COLS.JUEGOS,
+    COLS.CISTERNA,
+    COLS.ESTACIONAMIENTO_VISITAS,
 ]
 
 # Columnas numéricas para escalar (crítico para modelos lineales)
@@ -330,7 +333,10 @@ def get_xgboost_final_configs():
             COLS.SEGURIDAD,
             COLS.PILETA,
             COLS.TENNIS,
-            "SUM",
+            COLS.SUM,
+            COLS.ESTACIONAMIENTO_VISITAS,
+            COLS.CISTERNA,
+            COLS.JUEGOS,
         ],
         one_hot_cols=[COLS.PROVINCIA, COLS.CONDICION, COLS.ANIO],
         target_params=TargetParams(
@@ -406,7 +412,10 @@ def get_ridge_configs():
             COLS.SEGURIDAD,
             COLS.PILETA,
             COLS.TENNIS,
-            "SUM",
+            COLS.SUM,
+            COLS.ESTACIONAMIENTO_VISITAS,
+            COLS.CISTERNA,
+            COLS.JUEGOS,
         ],
         one_hot_cols=[],
         target_params=TargetParams(
@@ -467,7 +476,10 @@ def get_ridge_configs():
             COLS.SEGURIDAD,
             COLS.PILETA,
             COLS.TENNIS,
-            "SUM",
+            COLS.SUM,
+            COLS.ESTACIONAMIENTO_VISITAS,
+            COLS.CISTERNA,
+            COLS.JUEGOS,
         ],
         one_hot_cols=[],
         target_params=TargetParams(
