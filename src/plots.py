@@ -1,22 +1,47 @@
-import pandas as pd
-import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
-from matplotlib.container import BarContainer
 import math
-from typing import List, Tuple, Dict, Union
+import os
+from typing import Dict, List, Tuple, Union
+
 import contextily as cx
-from sklearn.tree import plot_tree
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
 from sklearn.metrics import (
     mean_absolute_error,
     mean_absolute_percentage_error,
     mean_squared_error,
     r2_score,
 )
+from sklearn.tree import plot_tree
+
+from src.constants import COLUMN_NAMES_LEGIBLE
+
+sns.set_theme(style="whitegrid")
+
+PLOTS_PATH = "../plots/"
+
+
+def finalize_plot(filename: str = None):
+    # Crear el directorio si no existe
+    if filename:
+        os.makedirs(PLOTS_PATH, exist_ok=True)
+        plt.tight_layout()
+        plt.savefig(
+            os.path.join(PLOTS_PATH, filename + ".png"), bbox_inches="tight", dpi=300
+        )
+    else:
+        plt.tight_layout()
+
+    plt.show()
 
 
 def plot_boolean_impact(
-    df: pd.DataFrame, bool_cols: List[str], target_col: str, n_cols: int = 3
+    df: pd.DataFrame,
+    bool_cols: List[str],
+    target_col: str,
+    n_cols: int = 3,
+    filename: str = None,
 ):
     """
     Generates a grid of boxplots to analyze the impact of boolean columns on a target variable.
@@ -37,11 +62,13 @@ def plot_boolean_impact(
 
     for j in range(i + 1, len(axes)):
         axes[j].set_visible(False)
-    plt.tight_layout()
-    plt.show()
+
+    finalize_plot(filename)
 
 
-def plot_correlation_heatmap(df: pd.DataFrame, numeric_cols: List[str] = None):
+def plot_correlation_heatmap(
+    df: pd.DataFrame, numeric_cols: List[str] = None, filename: str = None
+):
     """
     Generates and plots a correlation heatmap for the numeric columns of a DataFrame.
     """
@@ -53,10 +80,16 @@ def plot_correlation_heatmap(df: pd.DataFrame, numeric_cols: List[str] = None):
         print("No numeric columns found to plot correlation heatmap.")
         return
     corr_matrix = df_numeric.corr()
+
+    # Mapear nombres de columnas a versiones legibles
+    legible_names = [COLUMN_NAMES_LEGIBLE.get(col, col) for col in corr_matrix.columns]
+    corr_matrix.columns = legible_names
+    corr_matrix.index = legible_names
+
     plt.figure(figsize=(12, 10))
     sns.heatmap(corr_matrix, annot=True, cmap="coolwarm", fmt=".2f", linewidths=0.5)
-    plt.title("Correlation Matrix of Numeric Variables", fontsize=16)
-    plt.show()
+
+    finalize_plot(filename)
 
 
 def plot_histograms(
@@ -64,6 +97,7 @@ def plot_histograms(
     cols: List[str],
     n_cols: int = 3,
     clip_percentiles: Tuple[float, float] = None,
+    filename: str = None,
 ):
     """
     Generates a grid of histograms for specified columns in a DataFrame.
@@ -75,37 +109,45 @@ def plot_histograms(
     for i, col in enumerate(cols):
         ax = axes[i]
         if col not in df.columns:
-            ax.set_title(f'Column "{col}" not found')
             ax.set_visible(False)
             continue
         data_to_plot = df[col].dropna()
-        title = f'Distribution of "{col}"'
         if clip_percentiles:
             lower_quantile = data_to_plot.quantile(clip_percentiles[0])
             upper_quantile = data_to_plot.quantile(clip_percentiles[1])
             data_to_plot = data_to_plot.clip(lower=lower_quantile, upper=upper_quantile)
-            title += f"\n(Clipped at {clip_percentiles[0]*100:.0f}-{clip_percentiles[1]*100:.0f}th percentiles)"
         sns.histplot(data_to_plot, kde=True, ax=ax)
         mean_val = data_to_plot.mean()
+        median_val = data_to_plot.median()
         ax.axvline(
             mean_val,
             color="r",
             linestyle="--",
             linewidth=2,
-            label=f"Mean: {mean_val:.2f}",
+            label=f"Media: {mean_val:.2f}",
         )
-        ax.set_title(title)
-        ax.set_xlabel(col)
-        ax.set_ylabel("Frequency")
+        ax.axvline(
+            median_val,
+            color="g",
+            linestyle=":",
+            linewidth=2,
+            label=f"Mediana: {median_val:.2f}",
+        )
+        # Usar nombre legible para xlabel si está disponible
+        xlabel = COLUMN_NAMES_LEGIBLE.get(col, col)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel("Frecuencia")
         ax.legend()
 
     for j in range(i + 1, len(axes)):
         axes[j].set_visible(False)
-    plt.tight_layout()
-    plt.show()
+
+    finalize_plot(filename)
 
 
-def plot_boxplots(df: pd.DataFrame, cols: List[str], n_cols: int = 3):
+def plot_boxplots(
+    df: pd.DataFrame, cols: List[str], n_cols: int = 3, filename: str = None
+):
     """
     Generates a grid of boxplots for specified numeric columns in a DataFrame.
     """
@@ -125,12 +167,16 @@ def plot_boxplots(df: pd.DataFrame, cols: List[str], n_cols: int = 3):
 
     for j in range(i + 1, len(axes)):
         axes[j].set_visible(False)
-    plt.tight_layout()
-    plt.show()
+
+    finalize_plot(filename)
 
 
 def plot_bar_charts(
-    df: pd.DataFrame, cols: List[str], n_cols: int = 2, top_n: int = 15
+    df: pd.DataFrame,
+    cols: List[str],
+    n_cols: int = 2,
+    top_n: int = 15,
+    filename: str = None,
 ):
     """
     Generates a grid of bar charts for specified categorical columns.
@@ -142,7 +188,6 @@ def plot_bar_charts(
     for i, col in enumerate(cols):
         ax = axes[i]
         if col not in df.columns:
-            ax.set_title(f'Column "{col}" not found')
             ax.set_visible(False)
             continue
         counts = df[col].value_counts()
@@ -158,17 +203,19 @@ def plot_bar_charts(
             data_to_plot = counts
         plot_order = data_to_plot.index
         sns.barplot(
-            x=data_to_plot.index, y=data_to_plot.values, ax=ax, order=plot_order
+            x=data_to_plot.index, y=data_to_plot.values, ax=ax, order=plot_order,
+            hue=data_to_plot.index, palette="viridis", legend=False
         )
-        ax.set_title(f'Frequency of Categories in "{col}"')
-        ax.set_xlabel(col)
-        ax.set_ylabel("Count")
+        # Usar nombre legible para xlabel
+        xlabel = COLUMN_NAMES_LEGIBLE.get(col, col)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel("Conteo")
         ax.tick_params(axis="x", rotation=45)
 
     for j in range(i + 1, len(axes)):
         axes[j].set_visible(False)
-    plt.tight_layout()
-    plt.show()
+
+    finalize_plot(filename)
 
 
 def plot_geo_scatterplot(
@@ -180,7 +227,8 @@ def plot_geo_scatterplot(
     clip_percentiles: Tuple[float, float] = None,
     cmap: str = "viridis",
     add_basemap: bool = False,
-    alpha=0.3,
+    alpha=0.5,
+    filename: str = None,
 ):
     """
     Generates a scatter plot of geographical data, with points colored by another variable.
@@ -188,7 +236,7 @@ def plot_geo_scatterplot(
     lon_col, lat_col = geo_cols
 
     if not all(c in df.columns for c in [lon_col, lat_col, color_col]):
-        print(f"Error: One or more specified columns not found in the DataFrame.")
+        print(f"Error: Una o más columnas especificadas no se encontraron en el DataFrame.")
         return
 
     df_plot = df.copy()
@@ -199,43 +247,52 @@ def plot_geo_scatterplot(
         upper_quantile = color_data.quantile(clip_percentiles[1])
         color_data = color_data.clip(lower=lower_quantile, upper=upper_quantile)
 
+    # Mapear nombre de columna a versión legible
+    legible_color_name = COLUMN_NAMES_LEGIBLE.get(color_col, color_col)
+
     if log_scale:
         df_plot["color_values"] = np.log1p(color_data)
-        cbar_label = f"Log({color_col})"
+        cbar_label = f"Log({legible_color_name})"
     else:
         df_plot["color_values"] = color_data
-        cbar_label = color_col
+        cbar_label = legible_color_name
 
     df_plot = df_plot.dropna(subset=["color_values", lon_col, lat_col])
 
     if sample_size and sample_size < len(df_plot):
         df_plot = df_plot.sample(n=sample_size, random_state=42)
 
-    fig, ax = plt.subplots(figsize=(12, 12))
-    scatter = ax.scatter(
+    fig, ax = plt.subplots(figsize=(12, 10))
+    hexbin = ax.hexbin(
         x=df_plot[lon_col],
         y=df_plot[lat_col],
-        c=df_plot["color_values"],
+        C=df_plot["color_values"],
         cmap=cmap,
-        s=5,
-        edgecolors=None,
-        alpha=alpha,
+        gridsize=65,
+        mincnt=1,
+        alpha=0.68
     )
-    cbar = fig.colorbar(scatter, ax=ax, fraction=0.03, pad=0.04)
+    cbar = fig.colorbar(hexbin, ax=ax, fraction=0.046, pad=0.04)
     cbar.set_label(cbar_label, rotation=270, labelpad=15)
-    title = f"Geographical Distribution by {cbar_label}"
-    if clip_percentiles:
-        title += f"\n(Color scale clipped at {clip_percentiles[0]*100:.0f}-{clip_percentiles[1]*100:.0f}th percentiles)"
-    ax.set_title(title, fontsize=16)
-    ax.set_xlabel("Longitude")
-    ax.set_ylabel("Latitude")
-    ax.axis("equal")
+
+    ax.set_xlabel("Longitud")
+    ax.set_ylabel("Latitud")
+
+    # Mejorar aspect ratio - no forzar equal que distorsiona
+    ax.set_aspect('auto')
+
+    # Grid sutil para mejor orientación
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+
     if add_basemap:
         cx.add_basemap(ax, crs="EPSG:4326", source=cx.providers.OpenStreetMap.Mapnik)
-    plt.show()
+
+    finalize_plot(filename)
 
 
-def plot_median_price_impact(df: pd.DataFrame, bool_cols: List[str], target_col: str):
+def plot_median_price_impact(
+    df: pd.DataFrame, bool_cols: List[str], target_col: str, filename: str = None
+):
     """
     Calculates and plots the percentage impact on median price for boolean features.
     """
@@ -253,25 +310,32 @@ def plot_median_price_impact(df: pd.DataFrame, bool_cols: List[str], target_col:
         impacts[col] = impact
     impact_df = pd.DataFrame.from_dict(impacts, orient="index", columns=["impact_pct"])
     impact_df = impact_df.sort_values(by="impact_pct", ascending=False)
+
+    # Mapear nombres a versiones legibles
+    legible_names = [COLUMN_NAMES_LEGIBLE.get(col, col) for col in impact_df.index]
+
     plt.figure(figsize=(12, 8))
-    sns.barplot(
-        x=impact_df.index,
-        y=impact_df["impact_pct"],
-        hue=impact_df.index,
-        palette="viridis",
-        legend=False,
+    bars = plt.bar(
+        range(len(impact_df)),
+        impact_df["impact_pct"],
+        color=sns.color_palette("viridis", len(impact_df)),
+        edgecolor="black",
+        alpha=0.8
     )
-    plt.title("Percentage Impact on Median Price by Amenity", fontsize=16)
-    plt.xlabel("Amenity")
-    plt.ylabel("Median Price Impact (%) vs. Overall Median")
-    plt.xticks(rotation=45)
+    plt.xticks(range(len(impact_df)), legible_names, rotation=45, ha="right")
+    plt.ylabel("Impacto (%)")
     plt.axhline(0, color="black", linewidth=0.8, linestyle="--")
-    plt.tight_layout()
-    plt.show()
+    plt.grid(axis="y", linestyle="--", alpha=0.3)
+
+    finalize_plot(filename)
 
 
 def plot_categorical_impact(
-    df: pd.DataFrame, cat_cols: List[str], target_col: str, n_cols: int = 2
+    df: pd.DataFrame,
+    cat_cols: List[str],
+    target_col: str,
+    n_cols: int = 2,
+    filename: str = None,
 ):
     """
     Generates a grid of bar charts showing the impact of categorical features on the median price.
@@ -283,7 +347,6 @@ def plot_categorical_impact(
     for i, col in enumerate(cat_cols):
         ax = axes[i]
         if col not in df.columns:
-            ax.set_title(f'Column "{col}" not found')
             ax.set_visible(False)
             continue
         grouped = df.groupby(col)[target_col].median()
@@ -302,22 +365,25 @@ def plot_categorical_impact(
             order=impact_pct.index,
             legend=False,
         )
-        ax.set_title(f'Median Price Impact of "{col}"')
-        ax.set_xlabel(col)
-        ax.set_ylabel("Median Price Impact (%) vs. Overall")
+        # Usar nombre legible para xlabel
+        xlabel = COLUMN_NAMES_LEGIBLE.get(col, col)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel("Impacto (%)")
         if len(impact_pct.index) > 20:
             ax.set_xticks([])
-            ax.set_xlabel(f"{col} ({len(impact_pct.index)} categories)")
+            ax.set_xlabel(f"{xlabel} ({len(impact_pct.index)} categorías)")
         else:
             ax.tick_params(axis="x", rotation=45)
         ax.axhline(0, color="black", linewidth=0.8, linestyle="--")
     for j in range(i + 1, len(axes)):
         axes[j].set_visible(False)
-    plt.tight_layout()
-    plt.show()
+
+    finalize_plot(filename)
 
 
-def plot_feature_impact_ranking(df: pd.DataFrame, cat_cols: List[str], target_col: str):
+def plot_feature_impact_ranking(
+    df: pd.DataFrame, cat_cols: List[str], target_col: str, filename: str = None
+):
     """
     Ranks and plots the overall impact of categorical features on a target variable.
     """
@@ -335,20 +401,23 @@ def plot_feature_impact_ranking(df: pd.DataFrame, cat_cols: List[str], target_co
         impact_scores, orient="index", columns=["impact_score"]
     )
     ranked_df = ranked_df.sort_values(by="impact_score", ascending=False)
+
+    # Mapear nombres a versiones legibles
+    legible_names = [COLUMN_NAMES_LEGIBLE.get(col, col) for col in ranked_df.index]
+
     plt.figure(figsize=(12, 8))
-    sns.barplot(
-        x=ranked_df.index,
-        y=ranked_df["impact_score"],
-        hue=ranked_df.index,
-        palette="viridis",
-        legend=False,
+    bars = plt.bar(
+        range(len(ranked_df)),
+        ranked_df["impact_score"],
+        color=sns.color_palette("viridis", len(ranked_df)),
+        edgecolor="black",
+        alpha=0.8
     )
-    plt.title("Ranking of Categorical Feature Impact", fontsize=16)
-    plt.xlabel("Feature")
-    plt.ylabel("Impact Score (Std. Dev. of Median Price Impact %)")
-    plt.xticks(rotation=45, ha="right")
-    plt.tight_layout()
-    plt.show()
+    plt.xticks(range(len(ranked_df)), legible_names, rotation=45, ha="right")
+    plt.ylabel("Impacto")
+    plt.grid(axis="y", linestyle="--", alpha=0.3)
+
+    finalize_plot(filename)
 
 
 def plot_missing_values(
@@ -356,6 +425,7 @@ def plot_missing_values(
     numeric_cols: List[str] = None,
     bool_cols: List[str] = None,
     cat_cols: List[str] = None,
+    filename: str = None,
 ):
     """
     Calculates and plots the percentage of missing values, coloring bars by column type.
@@ -364,14 +434,15 @@ def plot_missing_values(
     missing_pct = missing_pct[missing_pct > 0]
 
     if missing_pct.empty:
-        print("No missing values found in the DataFrame.")
+        print("No se encontraron valores faltantes en el DataFrame.")
         return
 
+    # Colores estilo viridis para diferentes tipos de variables
     color_map = {
-        "numeric": "#1f77b4",
-        "boolean": "#ff7f0e",
-        "categorical": "#2ca02c",
-        "other": "#d62728",
+        "numeric": "#440154",     # Viridis dark purple
+        "boolean": "#31688E",     # Viridis blue
+        "categorical": "#35B779",  # Viridis green
+        "other": "#FDE725",       # Viridis yellow
     }
 
     col_to_type = {}
@@ -385,35 +456,45 @@ def plot_missing_values(
         for col in cat_cols:
             col_to_type[col] = "categorical"
 
+    # Mapear nombres de columnas a versiones legibles
+    legible_names = [COLUMN_NAMES_LEGIBLE.get(col, col) for col in missing_pct.index]
+
     palette = {
         col: color_map.get(col_to_type.get(col, "other"), "gray")
         for col in missing_pct.index
     }
 
     plt.figure(figsize=(15, 8))
-    sns.barplot(
-        x=missing_pct.index,
-        y=missing_pct.values,
-        hue=missing_pct.index,
-        palette=palette,
-        legend=False,
+    bars = plt.bar(
+        range(len(missing_pct)),
+        missing_pct.values,
+        color=[palette[col] for col in missing_pct.index],
+        edgecolor="black",
+        alpha=0.8
     )
 
-    plt.title("Percentage of Missing Values by Column", fontsize=16)
-    plt.xlabel("Columns")
-    plt.ylabel("% of Missing Values")
-    plt.xticks(rotation=45, ha="right")
+    plt.xticks(range(len(missing_pct)), legible_names, rotation=45, ha="right")
+    plt.ylabel("Valores Faltantes (%)")
+    plt.grid(axis="y", linestyle="--", alpha=0.3)
 
     from matplotlib.patches import Patch
 
+    # Traducir labels
+    type_labels = {
+        "numeric": "Numérico",
+        "boolean": "Booleano",
+        "categorical": "Categórico",
+        "other": "Otro"
+    }
+
     legend_elements = [
-        Patch(facecolor=color_map.get(type_name), label=type_name.capitalize())
+        Patch(facecolor=color_map.get(type_name), label=type_labels.get(type_name, type_name))
         for type_name in color_map
         if type_name in col_to_type.values()
     ]
-    plt.legend(handles=legend_elements, title="Column Type")
+    plt.legend(handles=legend_elements, title="Tipo de Variable")
 
-    plt.show()
+    finalize_plot(filename)
 
     not_plotted_cols = df.columns[df.isnull().sum() == 0].tolist()
     if not_plotted_cols:
@@ -432,6 +513,7 @@ def plot_missing_data_impact(
     cat_cols: List[str] = None,
     n_cols: int = 3,
     exclude_cols: List[str] = None,
+    filename: str = None,
 ):
     """
     Generates a grid of boxplots to analyze the impact of missing data on the target variable.
@@ -500,12 +582,15 @@ def plot_missing_data_impact(
     for j in range(len(cols_with_missing), len(axes)):
         axes[j].set_visible(False)
 
-    plt.tight_layout()
-    plt.show()
+    finalize_plot(filename)
 
 
 def plot_interaction(
-    df: pd.DataFrame, target_col: str, x_cols: Union[str, List[str]], facet_col: str
+    df: pd.DataFrame,
+    target_col: str,
+    x_cols: Union[str, List[str]],
+    facet_col: str,
+    filename: str = None,
 ):
     """
     Visualizes the interaction between one or more variables and a facet variable.
@@ -544,6 +629,14 @@ def plot_interaction(
         g.set_axis_labels(x_col, f"Log({target_col})")
         g.set_titles(f"{facet_col}: {{col_name}}")
         g.fig.tight_layout()
+
+        if filename:
+            # Create a unique filename for each plot in the loop
+            base, ext = os.path.splitext(filename)
+            loop_filename = f"{base}_{x_col}{ext}"
+            os.makedirs(PLOTS_PATH, exist_ok=True)
+            g.savefig(os.path.join(PLOTS_PATH, loop_filename))
+
         plt.show()
 
 
@@ -553,6 +646,7 @@ def plot_numeric_vs_target(
     target_col: str,
     n_cols: int = 2,
     sample_size: int = 2000,
+    filename: str = None,
 ):
     """
     Generates a grid of scatter plots for numeric features against a target variable.
@@ -582,11 +676,12 @@ def plot_numeric_vs_target(
     for j in range(i + 1, len(axes)):
         axes[j].set_visible(False)
 
-    plt.tight_layout()
-    plt.show()
+    finalize_plot(filename)
 
 
-def plot_decision_tree(tree_model, feature_names, figsize=(20, 10)):
+def plot_decision_tree(
+    tree_model, feature_names, figsize=(20, 10), filename: str = None
+):
     plt.figure(figsize=figsize)
     plot_tree(
         tree_model.named_steps["regressor"],
@@ -596,10 +691,10 @@ def plot_decision_tree(tree_model, feature_names, figsize=(20, 10)):
         fontsize=10,
     )
     plt.title("Reglas del Árbol de Decisión")
-    plt.show()
+    finalize_plot(filename)
 
 
-def plot_feature_importance(xgb_model, feature_names):
+def plot_feature_importance(xgb_model, feature_names, filename: str = None):
     xgb_regressor = xgb_model.named_steps["regressor"]
 
     importances = xgb_regressor.feature_importances_
@@ -607,6 +702,9 @@ def plot_feature_importance(xgb_model, feature_names):
     feat_imp_df = pd.DataFrame(
         {"Feature": feature_names, "Importance": importances}
     ).sort_values(by="Importance", ascending=False)
+
+    # Mapear a nombres legibles
+    feat_imp_df["Feature"] = feat_imp_df["Feature"].map(COLUMN_NAMES_LEGIBLE)
 
     plt.figure(figsize=(10, 8))
     sns.barplot(
@@ -617,12 +715,12 @@ def plot_feature_importance(xgb_model, feature_names):
         palette="viridis",
         legend=False,
     )
-    plt.title("Top 20 Features más Importantes (XGBoost)")
     plt.xlabel("Importancia (Gain)")
-    plt.show()
+    plt.ylabel("Feature")
+    finalize_plot(filename)
 
 
-def plot_model_comparison(models_predictions: Dict[str, List]):
+def plot_model_comparison(models_predictions: Dict[str, List], filename: str = None):
     """
     Plotea métricas comparativas (RMSE, MAE, R2, MAPE) para múltiples modelos.
     Maneja conjuntos de prueba distintos para RAW vs PROCESSED.
@@ -692,7 +790,6 @@ def plot_model_comparison(models_predictions: Dict[str, List]):
 
     # Configurar plot (Solo RMSE y MAE)
     fig, axes = plt.subplots(1, 2, figsize=(15, 6))
-    fig.suptitle("Impacto del Preprocesamiento en Modelos", fontsize=16)
 
     metrics_to_plot = [
         ("RMSE", "RMSE", "%.0f"),
@@ -721,8 +818,6 @@ def plot_model_comparison(models_predictions: Dict[str, List]):
             baseline_val, color="red", linestyle="--", linewidth=1.5, label="Baseline"
         )
 
-        ax.set_title(title)
-
         # Formato de eje Y
         ax.ticklabel_format(style="plain", axis="y")
 
@@ -731,13 +826,12 @@ def plot_model_comparison(models_predictions: Dict[str, List]):
             ax.bar_label(container, fmt=fmt, padding=3, fontsize=9)
 
         if i == 0:
-            ax.legend(title=hue_col, loc="upper right")
+            ax.legend(loc="upper right")
         else:
             if ax.get_legend():
                 ax.legend_.remove()
 
-    plt.tight_layout()
-    plt.show()
+    finalize_plot(filename)
 
     return df_metrics
 
@@ -746,6 +840,7 @@ def plot_cv_results(
     results_df: pd.DataFrame,
     baseline_name: str = "Baseline",
     vertical_layout: bool = True,
+    filename: str = None,
 ):
     """
     Genera dos gráficos de barras verticales para visualizar los resultados de CV.
@@ -863,14 +958,14 @@ def plot_cv_results(
         ax.yaxis.grid(True, linestyle="--", alpha=0.3)
         ax.set_axisbelow(True)
 
-    plt.tight_layout()
-    plt.show()
+    finalize_plot(filename)
 
 
 def plot_grid_search_results(
     results_df: pd.DataFrame,
     top_n: int = 10,
     figsize: tuple = (16, 7),
+    filename: str = None,
 ):
     """
     Visualiza las mejores N configuraciones de un grid search.
@@ -1013,14 +1108,14 @@ def plot_grid_search_results(
     ax_rmse.yaxis.grid(True, linestyle="--", alpha=0.3)
     ax_rmse.set_axisbelow(True)
 
-    plt.tight_layout()
-    plt.show()
+    finalize_plot(filename)
 
 
 def plot_learning_curve(
     evals_result: dict,
     metric: str = "rmse",
     figsize: tuple = (14, 5),
+    filename: str = None,
 ):
     """
     Grafica la learning curve de un modelo XGBoost.
@@ -1047,15 +1142,18 @@ def plot_learning_curve(
     plt.legend()
     plt.grid(alpha=0.3)
 
+    finalize_plot(filename)
+
 
 def plot_classifier_results(
     results_df: pd.DataFrame,
     top_n: int = 10,
     figsize: tuple = (16, 18),
+    filename: str = None,
 ):
     """
     Visualiza resultados de classifier_search_cv con 6 subplots (3x2).
-    
+
     Args:
         results_df: DataFrame retornado por classifier_search_cv
         top_n: Número de mejores configuraciones a mostrar en bar charts
@@ -1069,45 +1167,52 @@ def plot_classifier_results(
             break
 
     fig, axes = plt.subplots(3, 2, figsize=figsize)
-    
+
     # Métricas para bar charts (cada una ordenada por sí misma)
     # Usar nombres con prefijo test_
     metrics_config = [
-        ('test_recall', 'Top N por Recall', 'coral'),
-        ('test_f1', 'Top N por F1', 'steelblue'),
-        ('test_avg_precision', 'Top N por Avg Precision', 'mediumseagreen'),
-        ('test_precision', 'Top N por Precision', 'goldenrod'),
+        ("test_recall", "Top N por Recall", "coral"),
+        ("test_f1", "Top N por F1", "steelblue"),
+        ("test_avg_precision", "Top N por Avg Precision", "mediumseagreen"),
+        ("test_precision", "Top N por Precision", "goldenrod"),
     ]
-    
+
     # ============================================================
     # Bar charts (primeras 4 posiciones)
     # ============================================================
     bar_positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
-    
+
     for idx, (metric, title, color) in enumerate(metrics_config):
         row, col = bar_positions[idx]
         ax = axes[row, col]
-        
+
         # Nombre de columna test
-        metric_name = metric.replace('test_', '')
-        
+        metric_name = metric.replace("test_", "")
+
         # Ordenar por esta métrica y tomar top N
         top_data = results_df.sort_values(metric, ascending=False).head(top_n)
-        
+
         # Labels
         if id_col:
             labels = [f"ID {int(r[id_col])}" for _, r in top_data.iterrows()]
         else:
             labels = [f"#{i+1}" for i in range(len(top_data))]
-        
+
         x_pos = np.arange(len(top_data))
-        
-        bars = ax.bar(x_pos, top_data[metric], color=color, edgecolor='black', linewidth=1, alpha=0.8)
-        
+
+        bars = ax.bar(
+            x_pos,
+            top_data[metric],
+            color=color,
+            edgecolor="black",
+            linewidth=1,
+            alpha=0.8,
+        )
+
         # Destacar el mejor
-        bars[0].set_edgecolor('darkred')
+        bars[0].set_edgecolor("darkred")
         bars[0].set_linewidth(2.5)
-        
+
         ax.set_xlabel("Configuración", fontweight="bold")
         ax.set_ylabel(metric_name.upper(), fontweight="bold")
         ax.set_title(title, fontsize=12, fontweight="bold")
@@ -1115,75 +1220,92 @@ def plot_classifier_results(
         ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=9)
         ax.yaxis.grid(True, linestyle="--", alpha=0.3)
         ax.set_axisbelow(True)
-        
+
         # Agregar valores sobre las barras
         for bar, val in zip(bars, top_data[metric]):
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
-                   f'{val:.3f}', ha='center', va='bottom', fontsize=8)
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.01,
+                f"{val:.3f}",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+            )
 
-
-    
     # ============================================================
     # Scatter: Precision vs Recall (color = F1)
     # ============================================================
     ax = axes[2, 0]
     scatter = ax.scatter(
-        results_df['test_precision'], 
-        results_df['test_recall'],
-        c=results_df['test_f1'],
-        cmap='RdYlGn',
+        results_df["test_precision"],
+        results_df["test_recall"],
+        c=results_df["test_f1"],
+        cmap="RdYlGn",
         s=50,
         alpha=0.7,
-        edgecolors='black',
-        linewidth=0.5
+        edgecolors="black",
+        linewidth=0.5,
     )
-    plt.colorbar(scatter, ax=ax, label='F1 Score')
-    
+    plt.colorbar(scatter, ax=ax, label="F1 Score")
+
     # Marcar el mejor F1
-    best_f1_idx = results_df['test_f1'].idxmax()
+    best_f1_idx = results_df["test_f1"].idxmax()
     best = results_df.loc[best_f1_idx]
-    ax.scatter(best['test_precision'], best['test_recall'], 
-               s=200, facecolors='none', edgecolors='red', linewidth=2.5, label='Best F1')
-    
+    ax.scatter(
+        best["test_precision"],
+        best["test_recall"],
+        s=200,
+        facecolors="none",
+        edgecolors="red",
+        linewidth=2.5,
+        label="Best F1",
+    )
+
     ax.set_xlabel("Precision", fontweight="bold")
     ax.set_ylabel("Recall", fontweight="bold")
     ax.set_title("Precision vs Recall (color=F1)", fontsize=12, fontweight="bold")
     ax.legend()
     ax.grid(alpha=0.3)
-    
+
     # ============================================================
     # Scatter: ROC-AUC vs F1
     # ============================================================
     ax = axes[2, 1]
     scatter = ax.scatter(
-        results_df['test_roc_auc'], 
-        results_df['test_f1'],
-        c=results_df['test_recall'],
-        cmap='viridis',
+        results_df["test_roc_auc"],
+        results_df["test_f1"],
+        c=results_df["test_recall"],
+        cmap="viridis",
         s=50,
         alpha=0.7,
-        edgecolors='black',
-        linewidth=0.5
+        edgecolors="black",
+        linewidth=0.5,
     )
-    plt.colorbar(scatter, ax=ax, label='Recall')
-    
+    plt.colorbar(scatter, ax=ax, label="Recall")
+
     # Marcar el mejor F1
-    ax.scatter(best['test_roc_auc'], best['test_f1'], 
-               s=200, facecolors='none', edgecolors='red', linewidth=2.5, label='Best F1')
-    
+    ax.scatter(
+        best["test_roc_auc"],
+        best["test_f1"],
+        s=200,
+        facecolors="none",
+        edgecolors="red",
+        linewidth=2.5,
+        label="Best F1",
+    )
+
     ax.set_xlabel("ROC-AUC", fontweight="bold")
     ax.set_ylabel("F1", fontweight="bold")
     ax.set_title("ROC-AUC vs F1 (color=Recall)", fontsize=12, fontweight="bold")
     ax.legend()
     ax.grid(alpha=0.3)
-    
-    plt.tight_layout()
-    plt.show()
-    
+
+    finalize_plot(filename)
+
     # Imprimir resumen del mejor modelo
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🏆 MEJOR MODELO (por F1):")
-    print("="*60)
+    print("=" * 60)
     print(f"Config ID: {int(best[id_col]) if id_col else 'N/A'}")
     print(f"F1:        {best['test_f1']:.4f}")
     print(f"Precision: {best['test_precision']:.4f}")
@@ -1197,6 +1319,7 @@ def plot_classifier_comparison(
     metrics: List[str] = ["f1", "recall", "precision"],
     figsize: Tuple[int, int] = (18, 6),
     title: str = "Comparación de Modelos de Clasificación",
+    filename: str = None,
 ):
     """
     Genera gráficos de barras para comparar clasificadores en múltiples métricas.
@@ -1215,50 +1338,173 @@ def plot_classifier_comparison(
 
     # Colores
     test_color = "coral"
-    
+
     for i, metric in enumerate(metrics):
         ax = axes[i]
-        
+
         # Ordenar (Mayor es mejor)
         data = results_df.sort_values(metric, ascending=False)
-        
+
         x_pos = np.arange(len(data))
         model_names = data.index
 
         # Solo Test
         bars_test = ax.bar(
-            x_pos, 
-            data[metric], 
+            x_pos,
+            data[metric],
             width=0.6,
             yerr=data.get(f"{metric}_std"),
             color=test_color,
-            edgecolor='black',
-            alpha=0.9
+            edgecolor="black",
+            alpha=0.9,
         )
 
         # Estética
         ax.set_xticks(x_pos)
-        ax.set_xticklabels(model_names, rotation=45, ha='right', fontweight="bold")
+        ax.set_xticklabels(model_names, rotation=45, ha="right", fontweight="bold")
         ax.set_ylabel(metric.upper(), fontweight="bold")
         ax.set_title(f"Ranking por {metric.upper()}", fontsize=12, fontweight="bold")
-        ax.grid(axis='y', linestyle='--', alpha=0.3)
+        ax.grid(axis="y", linestyle="--", alpha=0.3)
         ax.set_ylim(0, 1.05)
         ax.set_yticks(np.arange(0, 1.1, 0.1))
-        
+
         # Agregar valores
         for bar, val in zip(bars_test, data[metric]):
             ax.text(
-                bar.get_x() + bar.get_width()/2, 
-                val + 0.005, 
-                f"{val:.3f}", 
-                ha='center', 
-                va='bottom',
-                fontsize=9, 
-                fontweight='bold',
-                color='darkred'
+                bar.get_x() + bar.get_width() / 2,
+                val + 0.005,
+                f"{val:.3f}",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+                fontweight="bold",
+                color="darkred",
             )
 
-    plt.suptitle(title, fontsize=16, fontweight='bold', y=1.05)
-    plt.tight_layout()
-    plt.show()
+    plt.suptitle(title, fontsize=16, fontweight="bold", y=1.05)
+    finalize_plot(filename)
 
+
+def plot_pca_scatter(X_pca_2d, y_target, sample_size=5000, figsize=(12, 8), filename=None):
+    """
+    Crea un scatter plot de los dos primeros componentes principales coloreado por el target.
+
+    Args:
+        X_pca_2d: Array de componentes principales (n_samples, 2)
+        y_target: Series con los valores del target (precio)
+        sample_size: Número de puntos a mostrar (para evitar overplotting)
+        figsize: Tamaño de la figura
+        filename: Nombre del archivo para guardar
+    """
+    # Crear DataFrame temporal para facilitar sampling
+    df_temp = pd.DataFrame({
+        'PC1': X_pca_2d[:, 0],
+        'PC2': X_pca_2d[:, 1],
+        'target': y_target.values
+    })
+
+    # Sampling si hay muchos datos
+    if sample_size and len(df_temp) > sample_size:
+        df_temp = df_temp.sample(n=sample_size, random_state=42)
+
+    # Crear figura
+    plt.figure(figsize=figsize)
+
+    # Detectar si es variable categórica o numérica
+    if y_target.dtype == 'object' or len(y_target.unique()) < 20:
+        # Variable categórica
+        unique_values = df_temp['target'].unique()
+        colors = sns.color_palette("Set1", n_colors=len(unique_values))
+
+        for i, value in enumerate(unique_values):
+            mask = df_temp['target'] == value
+            plt.scatter(df_temp.loc[mask, 'PC1'], df_temp.loc[mask, 'PC2'],
+                       label=value, alpha=0.6, s=30, edgecolors='none',
+                       color=colors[i])
+
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    else:
+        # Variable numérica
+        scatter = plt.scatter(df_temp['PC1'], df_temp['PC2'],
+                             c=df_temp['target'], cmap='viridis',
+                             alpha=0.6, s=30, edgecolors='none')
+
+        # Colorbar
+        cbar = plt.colorbar(scatter)
+        cbar.set_label('Log(Precio)')
+
+    # Configurar plot
+    plt.xlabel('Primera Componente Principal (PC1)')
+    plt.ylabel('Segunda Componente Principal (PC2)')
+    plt.grid(True, alpha=0.3)
+
+    finalize_plot(filename)
+
+
+def plot_boolean_percentage(
+    df: pd.DataFrame,
+    bool_cols: List[str],
+    figsize: Tuple[int, int] = (12, 8),
+    filename: str = None
+):
+    """
+    Genera un gráfico de barras mostrando el porcentaje de valores True para columnas booleanas.
+
+    Args:
+        df: DataFrame con los datos
+        bool_cols: Lista de nombres de columnas booleanas
+        figsize: Tamaño de la figura
+        filename: Nombre del archivo para guardar (opcional)
+    """
+    # Calcular porcentajes de True para cada columna
+    percentages = {}
+    for col in bool_cols:
+        if col in df.columns:
+            # Calcular porcentaje de True (excluyendo valores nulos)
+            valid_data = df[col].dropna()
+            if len(valid_data) > 0:
+                pct_true = (valid_data == True).mean() * 100
+                percentages[col] = pct_true
+
+    if not percentages:
+        print("No se encontraron columnas booleanas válidas.")
+        return
+
+    # Crear DataFrame para el plot
+    pct_df = pd.DataFrame.from_dict(percentages, orient='index', columns=['percentage'])
+    pct_df = pct_df.sort_values('percentage', ascending=False)
+
+    # Mapear nombres a versiones legibles
+    legible_names = [COLUMN_NAMES_LEGIBLE.get(col, col) for col in pct_df.index]
+
+    # Crear el plot
+    plt.figure(figsize=figsize)
+    bars = plt.bar(
+        range(len(pct_df)),
+        pct_df['percentage'],
+        color=sns.color_palette("viridis", len(pct_df)),
+        edgecolor="black",
+        alpha=0.8
+    )
+
+    # Configurar ejes y etiquetas
+    plt.xticks(range(len(pct_df)), legible_names, rotation=45, ha="right")
+    plt.ylabel("Porcentaje (%)", fontweight="bold")
+    plt.ylim(0, 100)
+
+    # Agregar valores sobre las barras
+    for i, (bar, val) in enumerate(zip(bars, pct_df['percentage'])):
+        plt.text(
+            bar.get_x() + bar.get_width() / 2,
+            val + 1,
+            f"{val:.1f}%",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            fontweight="bold"
+        )
+
+    # Grid para mejor legibilidad
+    plt.grid(axis="y", linestyle="--", alpha=0.3)
+
+    finalize_plot(filename)

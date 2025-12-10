@@ -35,8 +35,7 @@ from src.pipeline import (
     OutlierClipperParams,
     TargetParams,
 )
-from src.utils import COLS
-
+from src.constants import COLS
 
 # ============================================================
 # CONFIGURACIONES PARA DATASET NORMAL (98.5% sin outliers extremos)

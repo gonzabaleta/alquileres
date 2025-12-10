@@ -1,116 +1,44 @@
-import pandas as pd
 from typing import List
+
+import pandas as pd
 import numpy as np
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-DEV_SET_RAW_PATH = "data/raw/alquiler_AMBA_dev.csv"
-DEV_SET_CLEAN_PATH = "data/processed/dev_set_clean.csv"
-DEV_SET_CLEAN_NORMAL_PATH = "data/processed/dev_set_clean_normal.csv"
-DEV_SET_CLEAN_OUTLIERS_PATH = "data/processed/dev_set_clean_outliers.csv"
-TEST_SET_RAW_PATH = "data/alquiler_AMBA_test.csv"
-TARGET = "precio_pesos_constantes"
+from src.constants import (
+    DEV_SET_RAW_PATH,
+    DEV_SET_CLEAN_PATH,
+    DEV_SET_CLEAN_NORMAL_PATH,
+    DEV_SET_CLEAN_OUTLIERS_PATH,
+    DevSetType,
+)
 
 
-class COLS:
+_DEV_SET_PATHS = {
+    DevSetType.RAW: DEV_SET_RAW_PATH,
+    DevSetType.CLEAN: DEV_SET_CLEAN_PATH,
+    DevSetType.NORMAL: DEV_SET_CLEAN_NORMAL_PATH,
+    DevSetType.OUTLIERS: DEV_SET_CLEAN_OUTLIERS_PATH,
+}
+
+
+def get_dev_set(set_type: DevSetType) -> pd.DataFrame:
     """
-    Clase contenedora para los nombres de las columnas del dataset.
-    Permite un acceso centralizado y previene errores de tipeo.
+    Carga un tipo específico del dataset de desarrollo.
+
+    Args:
+        set_type: El tipo de dataset a cargar, especificado por el Enum DevSet.
+
+    Returns:
+        Un DataFrame de pandas con el dataset solicitado.
+        
+    Raises:
+        KeyError: Si el set_type no es un miembro válido de DevSet.
     """
-
-    # --- Identificadores y Target ---
-    ID_GRID = "id_grid"
-    TARGET = TARGET
-
-    # --- Features Principales ---
-    MES_LISTING = "MesListing"
-    TIPO_PROPIEDAD = "TIPOPROPIEDAD"
-    SUP_TOTAL = "STotalM2"
-    SUP_CONSTR = "SConstrM2"
-    SUP_DESCUBIERTA = "SDescubiertaM2"
-    SUP_DESCUBIERTA_PCT = "pct_descubierto"
-    BANOS_POR_DORMITORIO = "Banos_por_dormitorio"
-    M2_POR_AMBIENTE = "M2_por_ambiente"
-    DORMITORIOS = "Dormitorios"
-    BANOS = "Banos"
-    AMBIENTES = "Ambientes"
-    ANTIGUEDAD = "Antiguedad"
-    COCHERAS = "Cocheras"
-    AMENITIES_SCORE = "amenities_score"
-
-    # --- Features de Ubicación ---
-    CIUDAD = "ITE_ADD_CITY_NAME"
-    PROVINCIA = "ITE_ADD_STATE_NAME"
-    BARRIO = "ITE_ADD_NEIGHBORHOOD_NAME"
-    LONGITUD = "LONGITUDE"
-    LATITUD = "LATITUDE"
-
-    # --- Features Booleanas (Amenities) ---
-    AMOBLADO = "Amoblado"
-    CISTERNA = "Cisterna"
-    INTERNET = "AccesoInternet"
-    BUSINESS = "BusinessCenter"
-    GIMNASIO = "Gimnasio"
-    LAUNDRY = "Laundry"
-    CALEFACCION = "Calefaccion"
-    SUM = "SalonDeUsosMul"
-    AIRE = "AireAC"
-    RECEPCION = "Recepcion"
-    ESTACIONAMIENTO = "Estacionamiento"
-    JACUZZI = "Jacuzzi"
-    JUEGOS = "AreaJuegosInfantiles"
-    CHIMENEA = "Chimenea"
-    ASCENSOR = "Ascensor"
-    SALON_FIESTAS = "SalonFiestas"
-    SEGURIDAD = "Seguridad"
-    PILETA = "Pileta"
-    PISTA_JOGGING = "PistaJogging"
-    ESTACIONAMIENTO_VISITAS = "EstacionamientoVisitas"
-    LOBBY = "Lobby"
-    LOCALES = "LocalesComerciales"
-    SIST_INCENDIOS = "SistContraIncendios"
-    PARRILLAS = "AreaParrillas"
-    TENNIS = "CanchaTennis"
-    CINE = "AreaCine"
-    LUXURY = "LuxuryAmenities"
-
-    # --- Otras ---
-    SITIO_ORIGEN = "SitioOrigen"
-    CONDICION = "ITE_TIPO_PROD"  # Usado, Nuevo, Sin Clasificar
-    ANIO = "year"
-    MES = "mes_listing"
-
-
-CATEGORICAL_COLS = [
-    COLS.TIPO_PROPIEDAD,
-    COLS.MES_LISTING,
-    COLS.SITIO_ORIGEN,
-    COLS.AMOBLADO,
-    COLS.CISTERNA,
-    COLS.INTERNET,
-    COLS.BUSINESS,
-    COLS.GIMNASIO,
-    COLS.LAUNDRY,
-    COLS.CALEFACCION,
-    COLS.SUM,
-    COLS.AIRE,
-    COLS.RECEPCION,
-    COLS.ESTACIONAMIENTO,
-    COLS.JACUZZI,
-    COLS.JUEGOS,
-    COLS.CHIMENEA,
-    COLS.ASCENSOR,
-    COLS.SALON_FIESTAS,
-    COLS.SEGURIDAD,
-    COLS.PILETA,
-    COLS.ESTACIONAMIENTO_VISITAS,
-    COLS.SIST_INCENDIOS,
-    COLS.TENNIS,
-    COLS.CINE,
-    COLS.CIUDAD,
-    COLS.PROVINCIA,
-    COLS.BARRIO,
-    COLS.CONDICION,
-]
+    try:
+        path = _DEV_SET_PATHS[set_type]
+        return pd.read_csv("../" + path, low_memory=False)
+    except KeyError:
+        raise ValueError(f"Invalid dataset type: {set_type}. Must be one of {list(DevSetType)}")
 
 
 def analizar_columnas_categoricas(df: pd.DataFrame, columnas: list):

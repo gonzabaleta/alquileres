@@ -19,7 +19,7 @@ import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import FunctionTransformer
 from typing import List
-from src.utils import COLS
+from src.constants import COLS
 
 
 class ColumnDropper(BaseEstimator, TransformerMixin):

@@ -26,8 +26,8 @@ from src.config import (
     FeatureCreatorParams,
     OutlierClipperParams,
     TargetParams,
-    COLS,
 )
+from src.constants import COLS
 
 
 def evaluate_pipeline_configs(
