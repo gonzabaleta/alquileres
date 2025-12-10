@@ -203,8 +203,13 @@ def plot_bar_charts(
             data_to_plot = counts
         plot_order = data_to_plot.index
         sns.barplot(
-            x=data_to_plot.index, y=data_to_plot.values, ax=ax, order=plot_order,
-            hue=data_to_plot.index, palette="viridis", legend=False
+            x=data_to_plot.index,
+            y=data_to_plot.values,
+            ax=ax,
+            order=plot_order,
+            hue=data_to_plot.index,
+            palette="viridis",
+            legend=False,
         )
         # Usar nombre legible para xlabel
         xlabel = COLUMN_NAMES_LEGIBLE.get(col, col)
@@ -236,7 +241,9 @@ def plot_geo_scatterplot(
     lon_col, lat_col = geo_cols
 
     if not all(c in df.columns for c in [lon_col, lat_col, color_col]):
-        print(f"Error: Una o más columnas especificadas no se encontraron en el DataFrame.")
+        print(
+            f"Error: Una o más columnas especificadas no se encontraron en el DataFrame."
+        )
         return
 
     df_plot = df.copy()
@@ -270,7 +277,7 @@ def plot_geo_scatterplot(
         cmap=cmap,
         gridsize=65,
         mincnt=1,
-        alpha=0.68
+        alpha=0.68,
     )
     cbar = fig.colorbar(hexbin, ax=ax, fraction=0.046, pad=0.04)
     cbar.set_label(cbar_label, rotation=270, labelpad=15)
@@ -279,10 +286,10 @@ def plot_geo_scatterplot(
     ax.set_ylabel("Latitud")
 
     # Mejorar aspect ratio - no forzar equal que distorsiona
-    ax.set_aspect('auto')
+    ax.set_aspect("auto")
 
     # Grid sutil para mejor orientación
-    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    ax.grid(True, alpha=0.3, linestyle="--", linewidth=0.5)
 
     if add_basemap:
         cx.add_basemap(ax, crs="EPSG:4326", source=cx.providers.OpenStreetMap.Mapnik)
@@ -320,7 +327,7 @@ def plot_median_price_impact(
         impact_df["impact_pct"],
         color=sns.color_palette("viridis", len(impact_df)),
         edgecolor="black",
-        alpha=0.8
+        alpha=0.8,
     )
     plt.xticks(range(len(impact_df)), legible_names, rotation=45, ha="right")
     plt.ylabel("Impacto (%)")
@@ -411,7 +418,7 @@ def plot_feature_impact_ranking(
         ranked_df["impact_score"],
         color=sns.color_palette("viridis", len(ranked_df)),
         edgecolor="black",
-        alpha=0.8
+        alpha=0.8,
     )
     plt.xticks(range(len(ranked_df)), legible_names, rotation=45, ha="right")
     plt.ylabel("Impacto")
@@ -439,10 +446,10 @@ def plot_missing_values(
 
     # Colores estilo viridis para diferentes tipos de variables
     color_map = {
-        "numeric": "#440154",     # Viridis dark purple
-        "boolean": "#31688E",     # Viridis blue
+        "numeric": "#440154",  # Viridis dark purple
+        "boolean": "#31688E",  # Viridis blue
         "categorical": "#35B779",  # Viridis green
-        "other": "#FDE725",       # Viridis yellow
+        "other": "#FDE725",  # Viridis yellow
     }
 
     col_to_type = {}
@@ -470,7 +477,7 @@ def plot_missing_values(
         missing_pct.values,
         color=[palette[col] for col in missing_pct.index],
         edgecolor="black",
-        alpha=0.8
+        alpha=0.8,
     )
 
     plt.xticks(range(len(missing_pct)), legible_names, rotation=45, ha="right")
@@ -484,11 +491,14 @@ def plot_missing_values(
         "numeric": "Numérico",
         "boolean": "Booleano",
         "categorical": "Categórico",
-        "other": "Otro"
+        "other": "Otro",
     }
 
     legend_elements = [
-        Patch(facecolor=color_map.get(type_name), label=type_labels.get(type_name, type_name))
+        Patch(
+            facecolor=color_map.get(type_name),
+            label=type_labels.get(type_name, type_name),
+        )
         for type_name in color_map
         if type_name in col_to_type.values()
     ]
@@ -1385,7 +1395,9 @@ def plot_classifier_comparison(
     finalize_plot(filename)
 
 
-def plot_pca_scatter(X_pca_2d, y_target, sample_size=5000, figsize=(12, 8), filename=None):
+def plot_pca_scatter(
+    X_pca_2d, y_target, sample_size=5000, figsize=(12, 8), filename=None
+):
     """
     Crea un scatter plot de los dos primeros componentes principales coloreado por el target.
 
@@ -1397,11 +1409,9 @@ def plot_pca_scatter(X_pca_2d, y_target, sample_size=5000, figsize=(12, 8), file
         filename: Nombre del archivo para guardar
     """
     # Crear DataFrame temporal para facilitar sampling
-    df_temp = pd.DataFrame({
-        'PC1': X_pca_2d[:, 0],
-        'PC2': X_pca_2d[:, 1],
-        'target': y_target.values
-    })
+    df_temp = pd.DataFrame(
+        {"PC1": X_pca_2d[:, 0], "PC2": X_pca_2d[:, 1], "target": y_target.values}
+    )
 
     # Sampling si hay muchos datos
     if sample_size and len(df_temp) > sample_size:
@@ -1411,33 +1421,227 @@ def plot_pca_scatter(X_pca_2d, y_target, sample_size=5000, figsize=(12, 8), file
     plt.figure(figsize=figsize)
 
     # Detectar si es variable categórica o numérica
-    if y_target.dtype == 'object' or len(y_target.unique()) < 20:
+    if y_target.dtype == "object" or len(y_target.unique()) < 20:
         # Variable categórica
-        unique_values = df_temp['target'].unique()
+        unique_values = df_temp["target"].unique()
         colors = sns.color_palette("Set1", n_colors=len(unique_values))
 
         for i, value in enumerate(unique_values):
-            mask = df_temp['target'] == value
-            plt.scatter(df_temp.loc[mask, 'PC1'], df_temp.loc[mask, 'PC2'],
-                       label=value, alpha=0.6, s=30, edgecolors='none',
-                       color=colors[i])
+            mask = df_temp["target"] == value
+            plt.scatter(
+                df_temp.loc[mask, "PC1"],
+                df_temp.loc[mask, "PC2"],
+                label=value,
+                alpha=0.6,
+                s=30,
+                edgecolors="none",
+                color=colors[i],
+            )
 
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
     else:
         # Variable numérica
-        scatter = plt.scatter(df_temp['PC1'], df_temp['PC2'],
-                             c=df_temp['target'], cmap='viridis',
-                             alpha=0.6, s=30, edgecolors='none')
+        scatter = plt.scatter(
+            df_temp["PC1"],
+            df_temp["PC2"],
+            c=df_temp["target"],
+            cmap="viridis",
+            alpha=0.6,
+            s=30,
+            edgecolors="none",
+        )
 
         # Colorbar
         cbar = plt.colorbar(scatter)
-        cbar.set_label('Log(Precio)')
+        cbar.set_label("Log(Precio)")
 
     # Configurar plot
-    plt.xlabel('Primera Componente Principal (PC1)')
-    plt.ylabel('Segunda Componente Principal (PC2)')
+    plt.xlabel("Primera Componente Principal (PC1)")
+    plt.ylabel("Segunda Componente Principal (PC2)")
     plt.grid(True, alpha=0.3)
 
+    finalize_plot(filename)
+
+
+def plot_cluster_analysis(df_pca, cluster_analysis, amenities_analysis, filename=None):
+    """
+    Crea un análisis visual completo de los clusters.
+    """
+    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+
+    # 1. Distribución de clusters (tamaño)
+    cluster_counts = df_pca["cluster"].value_counts().sort_index()
+    colors = sns.color_palette("Set2", len(cluster_counts))
+
+    axes[0, 0].pie(
+        cluster_counts.values,
+        labels=[f"Cluster {i}" for i in cluster_counts.index],
+        autopct="%1.1f%%",
+        colors=colors,
+        startangle=90,
+    )
+    axes[0, 0].set_title("Distribución de Clusters")
+
+    # 2. Precio promedio por cluster
+    price_means = cluster_analysis["precio_pesos_constantes_mean"]
+    axes[0, 1].bar(price_means.index, np.exp(price_means.values), color=colors)
+    axes[0, 1].set_xlabel("Cluster")
+    axes[0, 1].set_ylabel("Precio Promedio ($)")
+    axes[0, 1].set_title("Precio Promedio por Cluster")
+    axes[0, 1].tick_params(axis="y", rotation=45)
+
+    # 3. Tamaño promedio por cluster
+    size_means = cluster_analysis["STotalM2_mean"]
+    axes[0, 2].bar(size_means.index, size_means.values, color=colors)
+    axes[0, 2].set_xlabel("Cluster")
+    axes[0, 2].set_ylabel("Superficie (m²) - Estandarizada")
+    axes[0, 2].set_title("Tamaño Promedio por Cluster")
+
+    # 4. Boxplot de precios por cluster
+    df_pca.boxplot(column="precio_pesos_constantes", by="cluster", ax=axes[1, 0])
+    axes[1, 0].set_xlabel("Cluster")
+    axes[1, 0].set_ylabel("Log(Precio)")
+    axes[1, 0].set_title("Distribución de Precios por Cluster")
+    plt.suptitle("")  # Remove automatic suptitle
+
+    # 5. Heatmap de amenities
+    amenities_subset = amenities_analysis[
+        ["Pileta", "Gimnasio", "Seguridad", "AireAC", "Laundry"]
+    ]
+    # Asegurar que los datos sean numéricos
+    amenities_subset = amenities_subset.astype(float)
+    im = axes[1, 1].imshow(amenities_subset.values, cmap="YlOrRd", aspect="auto")
+    axes[1, 1].set_xticks(range(len(amenities_subset.columns)))
+    axes[1, 1].set_xticklabels(amenities_subset.columns, rotation=45)
+    axes[1, 1].set_yticks(range(len(amenities_subset.index)))
+    axes[1, 1].set_yticklabels([f"Cluster {i}" for i in amenities_subset.index])
+    axes[1, 1].set_title("Amenities por Cluster")
+
+    # Añadir valores en el heatmap
+    for i in range(len(amenities_subset.index)):
+        for j in range(len(amenities_subset.columns)):
+            axes[1, 1].text(
+                j,
+                i,
+                f"{amenities_subset.iloc[i, j]:.2f}",
+                ha="center",
+                va="center",
+                fontsize=8,
+            )
+
+    # 6. Luxury properties por cluster
+    luxury_pct = cluster_analysis["outlier_mean"] * 100
+    axes[1, 2].bar(luxury_pct.index, luxury_pct.values, color=colors)
+    axes[1, 2].set_xlabel("Cluster")
+    axes[1, 2].set_ylabel("% Propiedades Luxury")
+    axes[1, 2].set_title("Propiedades Luxury por Cluster")
+
+    plt.tight_layout()
+    finalize_plot(filename)
+
+
+def plot_cluster_heatmaps(df_pca, numerical_cols, categorical_cols, filename=None):
+    """
+    Crea heatmaps de análisis de clusters con variables personalizables.
+
+    Args:
+        df_pca: DataFrame con columna 'cluster'
+        numerical_cols: Lista de columnas numéricas para el primer heatmap
+        categorical_cols: Lista de columnas categóricas/booleanas para el segundo heatmap
+        filename: Nombre del archivo para guardar
+    """
+    # Análisis interno
+    numerical_analysis = df_pca.groupby('cluster')[numerical_cols].mean()
+    categorical_analysis = df_pca.groupby('cluster')[categorical_cols].mean()
+
+    # Layout vertical con heatmaps cuadrados
+    fig, axes = plt.subplots(2, 1, figsize=(12, 16))
+
+    # 1. Heatmap de variables numéricas
+    im1 = axes[0].imshow(numerical_analysis.values.astype(float), cmap='RdYlBu_r', aspect='equal')
+    axes[0].set_xticks(range(len(numerical_analysis.columns)))
+    axes[0].set_xticklabels([COLUMN_NAMES_LEGIBLE.get(col, col) for col in numerical_analysis.columns],
+                           rotation=45, ha='right')
+    axes[0].set_yticks(range(len(numerical_analysis.index)))
+    axes[0].set_yticklabels([f'Cluster {i}' for i in numerical_analysis.index])
+    axes[0].set_title('Variables Numéricas por Cluster', fontsize=14, pad=20)
+
+    # Añadir valores en el heatmap
+    for i in range(len(numerical_analysis.index)):
+        for j in range(len(numerical_analysis.columns)):
+            axes[0].text(j, i, f'{numerical_analysis.iloc[i, j]:.2f}',
+                        ha='center', va='center', fontsize=9,
+                        color='white' if abs(numerical_analysis.iloc[i, j]) > 1 else 'black')
+
+    # 2. Heatmap de variables categóricas/amenities
+    im2 = axes[1].imshow(categorical_analysis.values.astype(float), cmap='YlOrRd', aspect='equal')
+    axes[1].set_xticks(range(len(categorical_analysis.columns)))
+    axes[1].set_xticklabels([COLUMN_NAMES_LEGIBLE.get(col, col) for col in categorical_analysis.columns],
+                           rotation=45, ha='right')
+    axes[1].set_yticks(range(len(categorical_analysis.index)))
+    axes[1].set_yticklabels([f'Cluster {i}' for i in categorical_analysis.index])
+    axes[1].set_title('Amenities por Cluster', fontsize=14, pad=20)
+
+    # Añadir valores en el heatmap
+    for i in range(len(categorical_analysis.index)):
+        for j in range(len(categorical_analysis.columns)):
+            axes[1].text(j, i, f'{categorical_analysis.iloc[i, j]:.2f}',
+                        ha='center', va='center', fontsize=9,
+                        color='white' if categorical_analysis.iloc[i, j] > 0.3 else 'black')
+
+    # Colorbars
+    plt.colorbar(im1, ax=axes[0], shrink=0.6)
+    plt.colorbar(im2, ax=axes[1], shrink=0.6)
+
+    plt.tight_layout()
+    finalize_plot(filename)
+
+
+def plot_cluster_geographic(df_pca, filename=None):
+    """
+    Análisis geográfico de clusters.
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+    # 1. Scatter geográfico coloreado por cluster
+    colors = sns.color_palette("Set2", df_pca["cluster"].nunique())
+    for i, cluster in enumerate(sorted(df_pca["cluster"].unique())):
+        cluster_data = df_pca[df_pca["cluster"] == cluster].sample(
+            min(1000, len(df_pca[df_pca["cluster"] == cluster]))
+        )
+        axes[0].scatter(
+            cluster_data["LONGITUDE"],
+            cluster_data["LATITUDE"],
+            c=[colors[i]],
+            label=f"Cluster {cluster}",
+            alpha=0.6,
+            s=20,
+        )
+
+    axes[0].set_xlabel("Longitud")
+    axes[0].set_ylabel("Latitud")
+    axes[0].set_title("Distribución Geográfica de Clusters")
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+
+    # 2. Ciudades más frecuentes por cluster
+    cluster_cities = []
+    city_counts = []
+
+    for cluster in sorted(df_pca["cluster"].unique()):
+        cluster_data = df_pca[df_pca["cluster"] == cluster]
+        top_city = cluster_data["ITE_ADD_CITY_NAME"].mode().iloc[0]
+        city_count = (cluster_data["ITE_ADD_CITY_NAME"] == top_city).sum()
+        cluster_cities.append(f"Cluster {cluster}\n({top_city})")
+        city_counts.append(city_count)
+
+    axes[1].bar(range(len(cluster_cities)), city_counts, color=colors)
+    axes[1].set_xticks(range(len(cluster_cities)))
+    axes[1].set_xticklabels(cluster_cities, rotation=45, ha="right")
+    axes[1].set_ylabel("Cantidad de Propiedades")
+    axes[1].set_title("Ciudad Principal por Cluster")
+
+    plt.tight_layout()
     finalize_plot(filename)
 
 
@@ -1445,7 +1649,7 @@ def plot_boolean_percentage(
     df: pd.DataFrame,
     bool_cols: List[str],
     figsize: Tuple[int, int] = (12, 8),
-    filename: str = None
+    filename: str = None,
 ):
     """
     Genera un gráfico de barras mostrando el porcentaje de valores True para columnas booleanas.
@@ -1471,8 +1675,8 @@ def plot_boolean_percentage(
         return
 
     # Crear DataFrame para el plot
-    pct_df = pd.DataFrame.from_dict(percentages, orient='index', columns=['percentage'])
-    pct_df = pct_df.sort_values('percentage', ascending=False)
+    pct_df = pd.DataFrame.from_dict(percentages, orient="index", columns=["percentage"])
+    pct_df = pct_df.sort_values("percentage", ascending=False)
 
     # Mapear nombres a versiones legibles
     legible_names = [COLUMN_NAMES_LEGIBLE.get(col, col) for col in pct_df.index]
@@ -1481,10 +1685,10 @@ def plot_boolean_percentage(
     plt.figure(figsize=figsize)
     bars = plt.bar(
         range(len(pct_df)),
-        pct_df['percentage'],
+        pct_df["percentage"],
         color=sns.color_palette("viridis", len(pct_df)),
         edgecolor="black",
-        alpha=0.8
+        alpha=0.8,
     )
 
     # Configurar ejes y etiquetas
@@ -1493,7 +1697,7 @@ def plot_boolean_percentage(
     plt.ylim(0, 100)
 
     # Agregar valores sobre las barras
-    for i, (bar, val) in enumerate(zip(bars, pct_df['percentage'])):
+    for i, (bar, val) in enumerate(zip(bars, pct_df["percentage"])):
         plt.text(
             bar.get_x() + bar.get_width() / 2,
             val + 1,
@@ -1501,7 +1705,7 @@ def plot_boolean_percentage(
             ha="center",
             va="bottom",
             fontsize=9,
-            fontweight="bold"
+            fontweight="bold",
         )
 
     # Grid para mejor legibilidad
