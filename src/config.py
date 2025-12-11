@@ -237,7 +237,10 @@ TREE_BASED_CONFIG_OUTLIERS = PipelineConfig(
         COLS.SEGURIDAD,
         COLS.PILETA,
         COLS.TENNIS,
-        "SUM",
+        COLS.SUM,
+        COLS.CISTERNA,
+        COLS.JUEGOS,
+        COLS.ESTACIONAMIENTO_VISITAS,
     ],
     one_hot_cols=[COLS.PROVINCIA, COLS.CONDICION, COLS.ANIO],
     target_params=TargetParams(

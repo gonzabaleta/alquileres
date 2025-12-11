@@ -848,29 +848,72 @@ def plot_model_comparison(models_predictions: Dict[str, List], filename: str = N
 
 def plot_cv_results(
     results_df: pd.DataFrame,
+    metrics: list = None,
     baseline_name: str = "Baseline",
     vertical_layout: bool = True,
+    show_train: bool = True,
     filename: str = None,
 ):
     """
-    Genera dos gráficos de barras verticales para visualizar los resultados de CV.
+    Genera gráficos de barras para visualizar los resultados de CV.
     Si hay métricas de train, muestra barras agrupadas (train vs test).
 
     Args:
         results_df (pd.DataFrame): DataFrame con los resultados.
+        metrics (list): Lista de métricas a plotear (ej: ["mae", "rmse", "r2"]).
+                       Si None, plotea solo ["mae", "rmse"] por defecto.
         baseline_name (str): Nombre de la configuración a usar como línea de referencia.
-        vertical_layout (bool): Si True, apila gráficos verticalmente (2 filas, 1 col).
-                                Si False, coloca gráficos lado a lado (1 fila, 2 cols).
+        vertical_layout (bool): Si True, apila gráficos verticalmente.
+                                Si False, coloca gráficos lado a lado.
+        show_train (bool): Si True, muestra métricas de train y test. Si False, solo test.
     """
+    # Mapeo de métricas a títulos legibles
+    metric_titles = {
+        "mae": "MAE promedio",
+        "rmse": "RMSE promedio",
+        "mse": "MSE promedio",
+        "r2": "R² promedio",
+        "mape": "MAPE promedio",
+        "medae": "MedAE promedio",
+    }
+    # Configurar métricas por defecto si no se especifican
+    if metrics is None:
+        metrics = ["mae", "rmse"]
+
+    # Verificar que las métricas existen en el DataFrame
+    available_metrics = []
+    for metric in metrics:
+        metric_col = f"{metric}_mean"
+        if metric_col in results_df.columns:
+            available_metrics.append(metric)
+        else:
+            print(
+                f"Warning: Métrica '{metric}' no encontrada en el DataFrame. Saltando..."
+            )
+
+    if not available_metrics:
+        raise ValueError("No se encontraron métricas válidas para plotear.")
+
+    metrics = available_metrics
+    n_metrics = len(metrics)
+
     # Detectar si hay métricas de train
-    has_train_metrics = "train_mae_mean" in results_df.columns
+    has_train_metrics = f"train_{metrics[0]}_mean" in results_df.columns and show_train
 
-    if vertical_layout:
-        fig, axes = plt.subplots(2, 1, figsize=(14, 18))
+    # Configurar layout de subplots
+    if n_metrics == 1:
+        fig, axes = plt.subplots(1, 1, figsize=(14, 9))
+        axes = [axes]
+    elif vertical_layout:
+        fig, axes = plt.subplots(n_metrics, 1, figsize=(8, 6 * n_metrics))
+        if n_metrics == 1:
+            axes = [axes]
     else:
-        fig, axes = plt.subplots(1, 2, figsize=(18, 7))
-
-    metrics = [("rmse", "Avg RMSE"), ("mae", "Avg MAE")]
+        # Layout horizontal
+        cols = min(n_metrics, 3)  # Máximo 3 columnas
+        rows = (n_metrics + cols - 1) // cols  # Ceil division
+        fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 6 * rows))
+        axes = axes.flatten() if n_metrics > 1 else [axes]
 
     # Crear una paleta fija mapeando cada configuración a un color específico
     # Esto asegura que "Config A" tenga el mismo color en ambos gráficos sin importar el orden
@@ -878,19 +921,30 @@ def plot_cv_results(
     colors = sns.color_palette("viridis", len(unique_configs))
     palette_dict = dict(zip(unique_configs, colors))
 
-    for i, (metric_key, title) in enumerate(metrics):
+    for i, metric_key in enumerate(metrics):
         ax = axes[i]
-        # Ordenar data por la métrica actual (Ascendente: menor es mejor)
-        data_sorted = results_df.sort_values(by=f"{metric_key}_mean")
+        title = metric_titles.get(metric_key, f"{metric_key.upper()} promedio")
+
+        # Ordenar data por la métrica actual
+        # Para r2: mayor es mejor, para otros: menor es mejor
+        ascending = metric_key != "r2"
+        data_sorted = results_df.sort_values(
+            by=f"{metric_key}_mean", ascending=ascending
+        )
 
         x_pos = np.arange(len(data_sorted))
 
-        if has_train_metrics:
+        # Verificar si hay métricas de train para esta métrica específica
+        has_train_for_metric = (
+            f"train_{metric_key}_mean" in results_df.columns and show_train
+        )
+
+        if has_train_for_metric:
             # Barras agrupadas: Train vs Test
             bar_width = 0.35
 
             # Barras de TRAIN
-            bars_train = ax.bar(
+            ax.bar(
                 x_pos - bar_width / 2,
                 data_sorted[f"train_{metric_key}_mean"],
                 bar_width,
@@ -902,7 +956,7 @@ def plot_cv_results(
             )
 
             # Barras de TEST
-            bars_test = ax.bar(
+            ax.bar(
                 x_pos + bar_width / 2,
                 data_sorted[f"{metric_key}_mean"],
                 bar_width,
@@ -962,7 +1016,6 @@ def plot_cv_results(
 
         ax.set_title(title, fontsize=14, fontweight="bold")
         ax.set_ylabel(title)
-        ax.set_xlabel("Configuración")
         ax.set_xticks(x_pos)
         ax.set_xticklabels(data_sorted.index, rotation=45, ha="right")
         ax.yaxis.grid(True, linestyle="--", alpha=0.3)
@@ -1551,43 +1604,65 @@ def plot_cluster_heatmaps(df_pca, numerical_cols, categorical_cols, filename=Non
         filename: Nombre del archivo para guardar
     """
     # Análisis interno
-    numerical_analysis = df_pca.groupby('cluster')[numerical_cols].mean()
-    categorical_analysis = df_pca.groupby('cluster')[categorical_cols].mean()
+    numerical_analysis = df_pca.groupby("cluster")[numerical_cols].mean()
+    categorical_analysis = df_pca.groupby("cluster")[categorical_cols].mean()
 
     # Layout vertical con heatmaps cuadrados
     fig, axes = plt.subplots(2, 1, figsize=(12, 16))
 
     # 1. Heatmap de variables numéricas
-    im1 = axes[0].imshow(numerical_analysis.values.astype(float), cmap='RdYlBu_r', aspect='equal')
+    im1 = axes[0].imshow(
+        numerical_analysis.values.astype(float), cmap="RdYlBu_r", aspect="equal"
+    )
     axes[0].set_xticks(range(len(numerical_analysis.columns)))
-    axes[0].set_xticklabels([COLUMN_NAMES_LEGIBLE.get(col, col) for col in numerical_analysis.columns],
-                           rotation=45, ha='right')
+    axes[0].set_xticklabels(
+        [COLUMN_NAMES_LEGIBLE.get(col, col) for col in numerical_analysis.columns],
+        rotation=45,
+        ha="right",
+    )
     axes[0].set_yticks(range(len(numerical_analysis.index)))
-    axes[0].set_yticklabels([f'Cluster {i}' for i in numerical_analysis.index])
-    axes[0].set_title('Variables Numéricas por Cluster', fontsize=14, pad=20)
+    axes[0].set_yticklabels([f"Cluster {i}" for i in numerical_analysis.index])
+    axes[0].set_title("Variables Numéricas por Cluster", fontsize=14, pad=20)
 
     # Añadir valores en el heatmap
     for i in range(len(numerical_analysis.index)):
         for j in range(len(numerical_analysis.columns)):
-            axes[0].text(j, i, f'{numerical_analysis.iloc[i, j]:.2f}',
-                        ha='center', va='center', fontsize=9,
-                        color='white' if abs(numerical_analysis.iloc[i, j]) > 1 else 'black')
+            axes[0].text(
+                j,
+                i,
+                f"{numerical_analysis.iloc[i, j]:.2f}",
+                ha="center",
+                va="center",
+                fontsize=9,
+                color="white" if abs(numerical_analysis.iloc[i, j]) > 1 else "black",
+            )
 
     # 2. Heatmap de variables categóricas/amenities
-    im2 = axes[1].imshow(categorical_analysis.values.astype(float), cmap='YlOrRd', aspect='equal')
+    im2 = axes[1].imshow(
+        categorical_analysis.values.astype(float), cmap="YlOrRd", aspect="equal"
+    )
     axes[1].set_xticks(range(len(categorical_analysis.columns)))
-    axes[1].set_xticklabels([COLUMN_NAMES_LEGIBLE.get(col, col) for col in categorical_analysis.columns],
-                           rotation=45, ha='right')
+    axes[1].set_xticklabels(
+        [COLUMN_NAMES_LEGIBLE.get(col, col) for col in categorical_analysis.columns],
+        rotation=45,
+        ha="right",
+    )
     axes[1].set_yticks(range(len(categorical_analysis.index)))
-    axes[1].set_yticklabels([f'Cluster {i}' for i in categorical_analysis.index])
-    axes[1].set_title('Amenities por Cluster', fontsize=14, pad=20)
+    axes[1].set_yticklabels([f"Cluster {i}" for i in categorical_analysis.index])
+    axes[1].set_title("Amenities por Cluster", fontsize=14, pad=20)
 
     # Añadir valores en el heatmap
     for i in range(len(categorical_analysis.index)):
         for j in range(len(categorical_analysis.columns)):
-            axes[1].text(j, i, f'{categorical_analysis.iloc[i, j]:.2f}',
-                        ha='center', va='center', fontsize=9,
-                        color='white' if categorical_analysis.iloc[i, j] > 0.3 else 'black')
+            axes[1].text(
+                j,
+                i,
+                f"{categorical_analysis.iloc[i, j]:.2f}",
+                ha="center",
+                va="center",
+                fontsize=9,
+                color="white" if categorical_analysis.iloc[i, j] > 0.3 else "black",
+            )
 
     # Colorbars
     plt.colorbar(im1, ax=axes[0], shrink=0.6)

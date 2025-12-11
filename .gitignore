@@ -10,8 +10,6 @@ PLAN.md
 
 .aiassistant/
 
-GEMINI.md
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

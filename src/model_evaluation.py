@@ -12,6 +12,7 @@ from sklearn.model_selection import (
 )
 from sklearn.pipeline import Pipeline
 from sklearn.compose import TransformedTargetRegressor
+from sklearn.metrics import median_absolute_error
 from typing import Type
 
 from tqdm.auto import tqdm
@@ -27,23 +28,54 @@ def _build_full_regressor(model, feature_pipeline, target_pipeline):
 
 def _extract_cv_metrics(cv_results: dict) -> dict:
     """Helper: extrae métricas de resultados de cross_validate."""
-    test_rmse = -np.mean(cv_results["test_rmse"])
+    # Test metrics
     test_mae = -np.mean(cv_results["test_mae"])
+    test_rmse = -np.mean(cv_results["test_rmse"])
+    test_mse = -np.mean(cv_results["test_mse"])
+    test_r2 = np.mean(cv_results["test_r2"])
+    test_mape = -np.mean(cv_results["test_mape"])
+    test_medae = -np.mean(cv_results["test_medae"])
 
     # Train metrics (si están disponibles)
-    if "train_rmse" in cv_results:
-        train_rmse = -np.mean(cv_results["train_rmse"])
+    if "train_mae" in cv_results:
         train_mae = -np.mean(cv_results["train_mae"])
+        train_rmse = -np.mean(cv_results["train_rmse"])
+        train_mse = -np.mean(cv_results["train_mse"])
+        train_r2 = np.mean(cv_results["train_r2"])
+        train_mape = -np.mean(cv_results["train_mape"])
+        train_medae = -np.mean(cv_results["train_medae"])
+
         overfit_gap = ((test_mae / train_mae) - 1) * 100 if train_mae > 0 else 0
+
         return {
+            # Test metrics
             "mae_mean": test_mae,
             "mae_std": np.std(cv_results["test_mae"]),
             "rmse_mean": test_rmse,
             "rmse_std": np.std(cv_results["test_rmse"]),
+            "mse_mean": test_mse,
+            "mse_std": np.std(cv_results["test_mse"]),
+            "r2_mean": test_r2,
+            "r2_std": np.std(cv_results["test_r2"]),
+            "mape_mean": test_mape,
+            "mape_std": np.std(cv_results["test_mape"]),
+            "medae_mean": test_medae,
+            "medae_std": np.std(cv_results["test_medae"]),
+
+            # Train metrics
             "train_mae_mean": train_mae,
             "train_mae_std": np.std(cv_results["train_mae"]),
             "train_rmse_mean": train_rmse,
             "train_rmse_std": np.std(cv_results["train_rmse"]),
+            "train_mse_mean": train_mse,
+            "train_mse_std": np.std(cv_results["train_mse"]),
+            "train_r2_mean": train_r2,
+            "train_r2_std": np.std(cv_results["train_r2"]),
+            "train_mape_mean": train_mape,
+            "train_mape_std": np.std(cv_results["train_mape"]),
+            "train_medae_mean": train_medae,
+            "train_medae_std": np.std(cv_results["train_medae"]),
+
             "overfit_gap_%": overfit_gap,
         }
     else:
@@ -52,6 +84,14 @@ def _extract_cv_metrics(cv_results: dict) -> dict:
             "mae_std": np.std(cv_results["test_mae"]),
             "rmse_mean": test_rmse,
             "rmse_std": np.std(cv_results["test_rmse"]),
+            "mse_mean": test_mse,
+            "mse_std": np.std(cv_results["test_mse"]),
+            "r2_mean": test_r2,
+            "r2_std": np.std(cv_results["test_r2"]),
+            "mape_mean": test_mape,
+            "mape_std": np.std(cv_results["test_mape"]),
+            "medae_mean": test_medae,
+            "medae_std": np.std(cv_results["test_medae"]),
         }
 
 
@@ -78,10 +118,17 @@ def evaluate_models_cv(
         verbose: Imprimir progreso (default: True)
 
     Returns:
-        DataFrame con métricas (rmse_mean, rmse_std, mae_mean, mae_std)
+        DataFrame con métricas: mae, rmse, mse, r2, mape, medae (con _mean y _std)
     """
     cv = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
-    scoring = {"rmse": "neg_root_mean_squared_error", "mae": "neg_mean_absolute_error"}
+    scoring = {
+        "mae": "neg_mean_absolute_error",
+        "rmse": "neg_root_mean_squared_error",
+        "mse": "neg_mean_squared_error",
+        "r2": "r2",
+        "mape": "neg_mean_absolute_percentage_error",
+        "medae": "neg_median_absolute_error",
+    }
     results = {}
 
     if verbose:
@@ -108,10 +155,19 @@ def evaluate_models_cv(
 
         if verbose:
             print(
-                f"  ✓ MAE: {results[model_name]['mae_mean']:,.0f} ± {results[model_name]['mae_std']:,.0f}"
+                f"  ✓ MAE:   {results[model_name]['mae_mean']:,.0f} ± {results[model_name]['mae_std']:,.0f}"
             )
             print(
-                f"  ✓ RMSE: {results[model_name]['rmse_mean']:,.0f} ± {results[model_name]['rmse_std']:,.0f}\n"
+                f"  ✓ RMSE:  {results[model_name]['rmse_mean']:,.0f} ± {results[model_name]['rmse_std']:,.0f}"
+            )
+            print(
+                f"  ✓ R²:    {results[model_name]['r2_mean']:.4f} ± {results[model_name]['r2_std']:.4f}"
+            )
+            print(
+                f"  ✓ MAPE:  {results[model_name]['mape_mean']:.2f}% ± {results[model_name]['mape_std']:.2f}%"
+            )
+            print(
+                f"  ✓ MedAE: {results[model_name]['medae_mean']:,.0f} ± {results[model_name]['medae_std']:,.0f}\n"
             )
 
     results_df = pd.DataFrame(results).T

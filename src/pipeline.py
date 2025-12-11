@@ -18,6 +18,7 @@ Uso típico:
     target_pipeline = build_target_pipeline(TREE_BASED_CONFIG_NORMAL)
 """
 
+import numpy as np
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
@@ -182,12 +183,24 @@ def build_target_pipeline(config: PipelineConfig) -> Pipeline:
     """
     Construye el pipeline de preprocesamiento para el target (y).
     Clipea outliers y aplica transformación logarítmica.
+    Las predicciones finales son clippeadas en 0.
     Ambas transformaciones son opcionales y configurables en PipelineConfig
     """
     target_config = config["target_params"]
 
+    # Clipeamos predicciones negativas (a veces XGBoost puede tirar negativo)
+    zero_clipper = (
+        "zero_clipper",
+        FunctionTransformer(
+            func=lambda x: x,
+            inverse_func=lambda x: np.maximum(0, x),
+            feature_names_out="one-to-one",
+        ),
+    )
+
     steps: List[Tuple[str, Any]] = [
-        ("clipper", OutlierClipper(**target_config["target_clipper_params"]))
+        zero_clipper,
+        ("clipper", OutlierClipper(**target_config["target_clipper_params"])),
     ]
 
     if target_config["log_transform"]:
