@@ -2781,3 +2781,170 @@ def plot_shap_discrete_impact_bars(
     finalize_plot(filename)
 
     return resultados_all
+
+
+def plot_holdout_results(
+    results_df: pd.DataFrame,
+    metrics: list = None,
+    baseline_name: str = "Baseline",
+    vertical_layout: bool = True,
+    show_train: bool = True,
+    filename: str = None,
+):
+    """
+    Genera gráficos de barras para visualizar los resultados de holdout set.
+    Versión adaptada de plot_cv_results para resultados sin _mean/_std.
+
+    Args:
+        results_df (pd.DataFrame): DataFrame con los resultados de evaluate_models_holdout.
+        metrics (list): Lista de métricas a plotear (ej: ["mae", "rmse", "r2"]).
+                       Si None, plotea solo ["mae", "rmse"] por defecto.
+        baseline_name (str): Nombre de la configuración a usar como línea de referencia.
+        vertical_layout (bool): Si True, apila gráficos verticalmente.
+                                Si False, coloca gráficos lado a lado.
+        show_train (bool): Si True, muestra métricas de train y test. Si False, solo test.
+        filename: Nombre del archivo para guardar
+    """
+    # Mapeo de métricas a títulos legibles
+    metric_titles = {
+        "mae": "MAE",
+        "rmse": "RMSE",
+        "mse": "MSE",
+        "r2": "R²",
+        "mape": "MAPE",
+        "medae": "MedAE",
+    }
+
+    # Configurar métricas por defecto si no se especifican
+    if metrics is None:
+        metrics = ["mae", "rmse"]
+
+    # Verificar que las métricas existen en el DataFrame
+    available_metrics = []
+    for metric in metrics:
+        if metric in results_df.columns:
+            available_metrics.append(metric)
+        else:
+            print(
+                f"Warning: Métrica '{metric}' no encontrada en el DataFrame. Saltando..."
+            )
+
+    if not available_metrics:
+        raise ValueError("No se encontraron métricas válidas para plotear.")
+
+    metrics = available_metrics
+    n_metrics = len(metrics)
+
+    # Detectar si hay métricas de train
+    has_train_metrics = f"train_{metrics[0]}" in results_df.columns and show_train
+
+    # Configurar layout de subplots
+    if n_metrics == 1:
+        fig, axes = plt.subplots(1, 1, figsize=(14, 9))
+        axes = [axes]
+    elif vertical_layout:
+        fig, axes = plt.subplots(n_metrics, 1, figsize=(8, 6 * n_metrics))
+        if n_metrics == 1:
+            axes = [axes]
+    else:
+        # Layout horizontal
+        cols = min(n_metrics, 3)  # Máximo 3 columnas
+        rows = (n_metrics + cols - 1) // cols  # Ceil division
+        fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 6 * rows))
+        axes = axes.flatten() if n_metrics > 1 else [axes]
+
+    # Crear una paleta fija mapeando cada configuración a un color específico
+    unique_configs = results_df.index.unique()
+    colors = sns.color_palette("viridis", len(unique_configs))
+    palette_dict = dict(zip(unique_configs, colors))
+
+    for i, metric_key in enumerate(metrics):
+        ax = axes[i]
+        title = metric_titles.get(metric_key, f"{metric_key.upper()}")
+
+        # Ordenar data por la métrica actual
+        # Para r2: mayor es mejor, para otros: menor es mejor
+        ascending = metric_key != "r2"
+        data_sorted = results_df.sort_values(by=metric_key, ascending=ascending)
+
+        x_pos = np.arange(len(data_sorted))
+
+        # Verificar si hay métricas de train para esta métrica específica
+        has_train_for_metric = (
+            f"train_{metric_key}" in results_df.columns and show_train
+        )
+
+        if has_train_for_metric:
+            # Barras agrupadas: Train vs Test
+            bar_width = 0.35
+
+            # Barras de TRAIN
+            ax.bar(
+                x_pos - bar_width / 2,
+                data_sorted[f"train_{metric_key}"],
+                bar_width,
+                label="Train",
+                alpha=0.7,
+                color="skyblue",
+                edgecolor="black",
+                linewidth=1,
+            )
+
+            # Barras de TEST
+            ax.bar(
+                x_pos + bar_width / 2,
+                data_sorted[metric_key],
+                bar_width,
+                label="Test",
+                alpha=0.8,
+                color="coral",
+                edgecolor="black",
+                linewidth=1,
+            )
+
+            ax.legend()
+        else:
+            # Barras simples (solo test)
+            # Usar el palette_dict para mantener colores consistentes entre gráficos
+            colors = [palette_dict[config] for config in data_sorted.index]
+
+            bars = ax.bar(
+                x_pos,
+                data_sorted[metric_key],
+                color=colors,
+                edgecolor="black",
+                linewidth=1,
+                alpha=0.8,
+            )
+
+        # Línea de referencia (baseline) si existe
+        if baseline_name in data_sorted.index:
+            baseline_value = data_sorted.loc[baseline_name, metric_key]
+            ax.axhline(
+                y=baseline_value,
+                color="red",
+                linestyle="--",
+                linewidth=2,
+                label=f"Baseline",
+                alpha=0.7,
+            )
+            if not has_train_for_metric:
+                ax.legend()
+
+        # Etiquetas y estilo
+        ax.set_ylabel(title, fontsize=12, fontweight="bold")
+        ax.set_title(f"{title}", fontsize=14, fontweight="bold")
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels(data_sorted.index, rotation=45, ha="right")
+        ax.grid(axis="y", linestyle="--", alpha=0.3)
+
+        # Formato del eje Y según la métrica
+        if metric_key in ["mae", "rmse", "mse", "medae"]:
+            ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:,.0f}"))
+        elif metric_key == "mape":
+            ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.1f}%"))
+        elif metric_key == "r2":
+            ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.3f}"))
+
+    plt.tight_layout()
+    finalize_plot(filename)
