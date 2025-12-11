@@ -2879,7 +2879,7 @@ def plot_holdout_results(
             bar_width = 0.35
 
             # Barras de TRAIN
-            ax.bar(
+            rects1 = ax.bar(
                 x_pos - bar_width / 2,
                 data_sorted[f"train_{metric_key}"],
                 bar_width,
@@ -2891,7 +2891,7 @@ def plot_holdout_results(
             )
 
             # Barras de TEST
-            ax.bar(
+            rects2 = ax.bar(
                 x_pos + bar_width / 2,
                 data_sorted[metric_key],
                 bar_width,
@@ -2902,13 +2902,16 @@ def plot_holdout_results(
                 linewidth=1,
             )
 
+            ax.bar_label(rects1, padding=3, fmt="%.0f", fontsize=9)
+            ax.bar_label(rects2, padding=3, fmt="%.0f", fontsize=9)
+
             ax.legend()
         else:
             # Barras simples (solo test)
             # Usar el palette_dict para mantener colores consistentes entre gráficos
             colors = [palette_dict[config] for config in data_sorted.index]
 
-            bars = ax.bar(
+            rects = ax.bar(
                 x_pos,
                 data_sorted[metric_key],
                 color=colors,
@@ -2916,6 +2919,7 @@ def plot_holdout_results(
                 linewidth=1,
                 alpha=0.8,
             )
+            ax.bar_label(rects, padding=3, fmt="%.0f", fontsize=10)
 
         # Línea de referencia (baseline) si existe
         if baseline_name in data_sorted.index:

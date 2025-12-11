@@ -1,0 +1,423 @@
+\documentclass[conference]{IEEEtran}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{placeins}
+\usepackage{booktabs}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+    \title{Predicción e Interpretación de Alquileres en AMBA: Modelado Híbrido y Análisis de Drivers de Precio}
+
+    \author{\IEEEauthorblockN{Gonzalo Martín Zabaleta Ferrando}
+    \IEEEauthorblockA{\textit{Universidad de San Andrés} \\
+    Buenos Aires, Argentina \\
+    gzabaletaferrando@udesa.edu.ar}
+    \and
+    \IEEEauthorblockN{Cipriano Oss Teruel}
+    \IEEEauthorblockA{\textit{Universidad de San Andrés} \\
+    Buenos Aires, Argentina \\
+    cossteruel@udesa.edu.ar}
+    }
+
+    \maketitle
+
+    \begin{abstract}
+        \noindent
+        Este trabajo aborda la predicción de precios de alquiler en el Área Metropolitana de Buenos Aires (AMBA), utilizando un \emph{dataset} de 50,000 publicaciones de Mercado Libre (2021--2022). Se desarrolló un \emph{pipeline} completo de preprocesamiento, modelado predictivo y análisis explicativo. La principal contribución es la identificación del impacto de propiedades con precios extremos (\emph{outliers}) en las métricas de evaluación, y la propuesta de una arquitectura híbrida que combina un clasificador de segmento de mercado con regresores especializados. Los resultados muestran que el enfoque híbrido logra el menor error absoluto medio (MAE: 23,314) y mediano (MedAE: 934), mejorando notablemente la precisión en el segmento masivo del mercado. Sin embargo, un modelo XGBoost único con hiperparámetros optimizados obtiene menor error cuadrático medio (RMSE), al capturar mejor los casos extremos. Este \emph{trade-off} entre MAE y RMSE refleja una tensión inherente al problema, y la elección final depende del criterio de negocio: precisión en el segmento típico vs.\ reducción de errores extremos.
+    \end{abstract}
+
+    \begin{IEEEkeywords}
+        mercado inmobiliario, aprendizaje automático, XGBoost, modelo híbrido, outliers
+    \end{IEEEkeywords}
+
+    \section{Introducción}
+    El mercado inmobiliario de Buenos Aires presenta desafíos únicos para la tasación automática debido a la alta heterogeneidad de propiedades, la presencia de información incompleta y la existencia de un subconjunto pequeño pero influyente de propiedades de lujo con precios extremadamente altos. Estas características generan distribuciones fuertemente sesgadas y relaciones no lineales entre las variables disponibles y el precio de alquiler.
+    En este contexto, los modelos de regresión tradicionales quedan ``tironeados'' por las observaciones extremas: si el modelo se ajusta para capturar los precios del segmento de lujo, deteriora su rendimiento en el segmento masivo; si se optimiza para propiedades típicas, las predicciones para viviendas de lujo resultan inaceptables. Este \emph{trade-off} se manifiesta en las métricas de evaluación: minimizar el error cuadrático (RMSE) favorece reducir errores extremos, mientras que minimizar el error absoluto (MAE) prioriza la precisión promedio. Una solución habitual consiste en eliminar los \emph{outliers}, sacrificando capacidad de generalización sobre ese segmento.
+    En este trabajo proponemos una alternativa: mantener tanto las propiedades normales como las de lujo, pero modelándolas de forma diferenciada. Se desarrolla un enfoque híbrido en dos etapas: primero, un clasificador XGBoost identifica si una propiedad pertenece al segmento de lujo (percentil superior 1.5\%); luego, según la clase asignada, se aplica un regresor especializado entrenado exclusivamente en ese segmento. De esta manera, aprovechamos toda la información disponible sin que el conjunto minoritario de viviendas extremas degrade el desempeño del modelo en el segmento mayoritario. Además, utilizamos valores SHAP para interpretar las predicciones y cuantificar el impacto de cada característica sobre el precio.
+
+    \section{Conjunto de datos}
+    El conjunto de datos proviene de anuncios de alquiler de departamentos publicados en Mercado Libre para el AMBA durante 2021--2022, dividido en un set de desarrollo (278.725 muestras) y un set de prueba (30.970 muestras): el primero se utiliza para entrenamiento, validación y selección de modelos; el segundo se reserva para la evaluación final.
+
+    La variable objetivo es el precio del alquiler expresado en pesos (constante, actualizado por inflación para los años considerados). Entre las variables de entrada (\textit{features}) se incluyen:
+    \begin{itemize}
+        \item \textbf{Características físicas}: superficie total y construida, cantidad de ambientes, dormitorios, baños, cocheras y antigüedad.
+        \item \textbf{Ubicación}: ciudad, provincia, barrio, latitud y longitud.
+        \item \textbf{Amenities}: un conjunto de variables booleanas que indican la presencia de piscina, gimnasio, seguridad, parrilla, entre otros.
+        \item \textbf{Información temporal}: mes y año de publicación del aviso.
+    \end{itemize}
+
+    Ambos conjuntos de datos se procesan a través de un \emph{pipeline} de limpieza y preprocesamiento específico para el problema, descripto en la siguiente sección.
+
+    \subsection{Limpieza}
+    Primero se implementó un pipeline de limpieza con transformaciones determinísticas que no dependen de métricas calculadas en el set de entrenamiento:
+    \begin{itemize}
+        \item \textbf{Normalización de variables booleanas}: columnas con valores \emph{``Sí/No''}, \emph{``1/0''} o equivalentes se transforman a tipo booleano.
+        \item \textbf{Tratamiento de valores imposibles}: se reemplazan por \texttt{NaN} las superficies negativas, las superficies iguales a cero y los conteos de ambientes o dormitorios iguales a cero, que no son posibles en una propiedad.
+        \item \textbf{Consistencia entre superficies}: cuando la superficie construida supera a la superficie total se considera inconsistencia y se marca la superficie construida como faltante.
+        \item \textbf{Consistencia entre ambientes}: si el número de dormitorios supera al total de ambientes se reemplaza el valor de dormitorios por \texttt{NaN}.
+        \item \textbf{Edad del inmueble}: la variable de antigüedad se transforma a años numéricos, interpretando la categoría ``a estrenar'' como antigüedad cero.
+        \item \textbf{Variables de fecha}: a partir de la fecha de publicación se extrae el mes y año de publicación.
+    \end{itemize}
+
+    \subsection{Análisis exploratorio}
+    \subsubsection{Distribución del precio}
+    La Figura~\ref{fig:precio_hist} muestra el histograma del precio de alquiler con la media y la mediana señaladas con líneas verticales. El gráfico está truncado en el percentil 98,5 (clipea el 1,5\% superior) para facilitar la visualización de la distribución principal, dado que los outliers extremos comprimen la escala del eje horizontal. Se observa una distribución fuertemente sesgada: la mediana ronda los 9\,000 pesos, mientras que la media supera los 27\,000 pesos. Esta diferencia indica que un porcentaje pequeño de propiedades extremadamente caras empuja hacia arriba el promedio. Esto sugiere que el dataset contiene tanto alquileres masivos (clase media) como un segmento de propiedades de lujo que distorsionan el promedio.
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{plots/eda/03-distribucion-precio-clipped.png}
+        \caption{Distribución del precio de alquiler truncada en el percentil 98,5. La media es considerablemente mayor que la mediana, evidenciando una cola larga y angosta de propiedades de lujo.}
+        \label{fig:precio_hist}
+    \end{figure}
+
+    Este patrón de asimetría extrema se repite en otras variables numéricas, como superficie construida y cantidad de dormitorios. Si bien es razonable sospechar que parte de estos outliers corresponden a errores en los datos (por ejemplo, propiedades con más de 50 baños o alquileres de \$35.000.000 en 2022), esta hipótesis no puede verificarse con la información disponible.
+
+    Como veremos más adelante, este comportamiento implica que la función de pérdida cuadrática penalizará fuertemente los errores en el segmento de lujo, pudiendo sacrificar la precisión en el segmento masivo. Este \emph{tradeoff} es uno de los motivos principales para considerar estrategias distintas para los \emph{outliers} y para las propiedades promedio.
+
+    \subsubsection{Correlaciones entre variables}
+    La matriz de correlación de la Figura~\ref{fig:corr} (calculada sobre variables estandarizadas y con outliers truncados) revela cierta estructura en las relaciones lineales entre variables. Se identifican dos grupos de variables altamente correlacionadas entre sí y también con el precio: superficies (total y construida) por un lado, y features de habitabilidad (dormitorios, baños, ambientes) por otro. Esta redundancia implica riesgo de colinealidad en modelos lineales, aunque los modelos basados en árboles (como XGBoost) no deberían verse afectados. La antigüedad no muestra correlación sobre el precio, sugiriendo que su efecto es mínimo o altamente no lineal. Lo más sorprendente es la débil correlación entre coordenadas geográficas y precio, contradiciendo nuestra intuición. Sin embargo, como se observa en la siguiente sección, esto no indica que la ubicación sea irrelevante, sino que su efecto sobre el precio es altamente no lineal y/o contextual.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{plots/eda/04-correlation-matrix-std.png}
+        \caption{Matriz de correlación (datos preprocesados). Redundancia entre superficies y entre dormitorios/baños/ambientes. Las coordenadas geográficas muestran correlación débil con precio, revelando efectos espaciales no-lineales.}
+        \label{fig:corr}
+    \end{figure}
+
+    \subsubsection{Distribución geográfica}
+    Para visualizar la relación espacial entre ubicación y precio, se generó un gráfico de hexágonos (\textit{hexbin}) utilizando Matplotlib, donde cada hexágono representa el precio promedio (en escala logarítmica) de las propiedades en esa región.
+
+    La Figura~\ref{fig:geoplot} confirma que la ubicación es un factor importante del precio, y muestra una clara distribución de poder adquisitivo en el AMBA. Las zonas hacia el norte y más próximas al Río de la Plata concentran propiedades de alto valor, coherente con barrios de alto poder adquisitivo. Hacia el conurbano, se observan hexágonos verdosos aislados que posiblemente se correspondan con barrios privados. Interesantemente, algunos hexágonos amarillos vibrantes aparecen en zonas de bajo poder adquisitivo, reforzando la hipótesis de que estos outliers son errores de medición.
+
+    Este mapa nos muestra que, si bien la latitud y longitud no se correlacionan linealmente con el precio, la ubicación sí importa. El efecto es altamente no-lineal: no alcanza con moverse un grado hacia el norte para aumentar el precio, sino que importa estar dentro de regiones específicas (lo cual es especialmente cierto para los barrios privados).
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.9\linewidth]{plots/eda/11-geo-plot.png}
+        \caption{Distribución espacial del precio promedio por región (hexbin, escala logarítmica). La concentración de precios altos en zona norte y junto al río evidencia patrones espaciales no-lineales.}
+        \label{fig:geoplot}
+    \end{figure}
+
+    \subsubsection{Análisis de componentes principales}
+    Para explorar la estructura latente del dataset, se aplicó PCA sobre todas las variables numéricas (incluyendo booleanas codificadas como 0/1), excluyendo únicamente las categóricas puras. La Figura~\ref{fig:pca} proyecta las propiedades en las dos primeras componentes principales, coloreadas por precio en escala logarítmica.
+    Aunque no se distinguen clusters marcados, sí que hay cierto patrón: el precio aumenta marcadamente de izquierda a derecha (PC1) y sutilmente de abajo hacia arriba (PC2). Al analizar la contribución de cada variable a las componentes, se observa que PC1 captura tamaño y habitabilidad (superficie, dormitorios, ambientes), mientras que PC2 refleja ubicación geográfica. Esto confirma los hallazgos de la matriz de correlación: estas dos dimensiones son los principales explicadores del precio.
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.9\linewidth]{plots/eda/12-pca-precio.png}
+        \caption{Proyección PCA coloreada por log(precio). El gradiente evidencia que PC1 y PC2 capturan parte de la variabilidad del precio, sin clusters separables.}
+        \label{fig:pca}
+    \end{figure}
+
+    \subsection{Preprocesamiento}
+
+    Sobre el dataset limpio, se realizó un estudio de configuraciones de preprocesamiento.
+
+    Dada la fuerte presencia de outliers identificada en el análisis exploratorio, se evaluaron tres versiones del dataset: (1) el dataset completo, (2) excluyendo el 1,5\% más caro (percentil 98,5), y (3) excluyendo el 98,5\% más barato (percentil 1,5).
+
+    Para evaluar el impacto de cada configuración de preprocesamiento, se entrenaron modelos baseline (hiperparámetros por defecto) de dos familias: regresión lineal y árbol de decisión. Se compararon las métricas obtenidas en cada versión del dataset aplicando distintas transformaciones. Las configuraciones óptimas fueron:
+
+    \begin{itemize}
+        \item \textbf{Modelos basados en árboles:}
+        \begin{itemize}
+            \item Imputación por mediana y moda
+            \item Features creadas: score de amenities, densidad de habitaciones, ratio baños/dormitorios, \% descubierto
+            \item One-hot encoding para provincia y condición
+            \item Ordinal encoding para barrio, ciudad y mes
+            \item \emph{Solo en dataset con outliers:} transformación logarítmica en el precio
+        \end{itemize}
+
+        \item \textbf{Modelos lineales y redes neuronales:}
+        \begin{itemize}
+            \item Imputación por mediana/moda
+            \item Features creadas: ídem anterior
+            \item Transformación logarítmica de superficie y antigüedad
+            \item Estandarización de todas las variables numéricas
+            \item Target encoding para barrio, ciudad e ID de grilla
+            \item One-hot encoding para provincia y condición
+            \item \emph{Dataset sin outliers:} sin transformación del target
+            \item \emph{Dataset con outliers:} $\log(y+1)$ en el target
+        \end{itemize}
+    \end{itemize}
+
+
+
+    \section{Metodología}
+    \subsection{Métricas de evaluación}
+    Se utilizó el \textbf{Mean Absolute Error (MAE)} como métrica principal:
+    \begin{equation}
+        \text{MAE} = \frac{1}{n} \sum_{i=1}^{n} |y_i - \hat{y}_i|
+    \end{equation}
+    Esta elección se tomó por dos razones: (1) interpretabilidad directa como error promedio en pesos, y (2) robustez ante outliers, ya que no eleva el error al cuadrado. Como métrica secundaria se utilizó \textbf{RMSE} ($\sqrt{\frac{1}{n}\sum(y_i - \hat{y}_i)^2}$), que penaliza más fuertemente los errores grandes pero es sensible a los valores extremos identificados en el EDA.
+    \subsection{Algoritmos utilizados}
+    \subsubsection{Modelos baseline}
+    Se evaluaron cuatro modelos base: (1) \textbf{DummyRegressor} (predicción de la mediana), (2) \textbf{Lasso} (regresión lineal con regularización $L_1$), (3) \textbf{Decision Tree}, y (4) \textbf{XGBoost} con parámetros por defecto.
+    \subsubsection{Gradient Boosting}
+    Se evaluaron dos implementaciones de gradient boosting: \textbf{XGBoost} (\texttt{xgboost}) y \textbf{LightGBM} (\texttt{lightgbm}). Ambos son algoritmos de ensamble que construyen árboles de decisión secuencialmente, donde cada árbol corrige los errores residuales del anterior. En los dos casos se utilizó la función de pérdida predeterminada (MSE).
+    \subsubsection{Redes Neuronales}
+    Se exploraron redes neuronales feedforward (\texttt{MLPRegressor} de \texttt{sckit-learn}) con múltiples capas ocultas y función de activación \texttt{relu}
+    \subsubsection{Modelo híbrido}
+    Se desarrolló un \textbf{modelo híbrido} de dos etapas:
+    \begin{enumerate}
+        \item \textbf{Clasificación}: Un \texttt{XGBClassifier} determina si la propiedad pertenece al segmento de outliers (percentil superior 1,5\%) o al segmento normal.
+        \item \textbf{Predicción especializada}: Según la clasificación, se utiliza un \texttt{XGBRegressor} entrenado específicamente en ese segmento.
+    \end{enumerate}
+    \subsection{Análisis explicativo con SHAP}
+    Para interpretar las predicciones del modelo final, se utilizó la librería \textbf{SHAP}. Para cada predicción, SHAP asigna a cada feature $j$ un valor $\phi_j$ que representa su contribución marginal:
+    \begin{equation}
+        \hat{y}_i = \phi_0 + \sum_{j=1}^{M} \phi_j(x_i)
+    \end{equation}
+    donde $\phi_0$ es el valor base (predicción promedio del dataset). Se utilizó \texttt{TreeExplainer}, que calcula valores SHAP exactos de forma eficiente aprovechando la estructura de los árboles de decisión.
+%----------------------------------------------------------
+    \section{Experimentos}
+    \subsection{Diseño experimental}
+    El dataset provisto está dividido en dos conjuntos independientes: \textbf{dev} y \textbf{test}. Sobre el conjunto dev, todas las comparaciones de modelos se realizaron mediante \textbf{cross-validation} con $k=3$ folds para modelos de árboles y $k=2$ para redes neuronales (debido al mayor costo computacional). El modelo final seleccionado se evaluó sobre el conjunto test.
+    \subsection{Estrategia de segmentación del dataset}
+    Dada la fuerte asimetría del precio, se entrenaron modelos sobre tres versiones del dataset:
+    \begin{itemize}
+        \item \textbf{Completo}: todas las observaciones
+        \item \textbf{Normal}: excluyendo el 1,5\% más caro (percentil 98,5)
+        \item \textbf{Outliers}: solo el 1,5\% más caro
+    \end{itemize}
+    \subsection{Selección de modelos}
+    \subsubsection{Etapa 1: Evaluación de baselines}
+    Se evaluaron modelos con parámetros por defecto sobre datos crudos para establecer una línea base.
+    \subsubsection{Etapa 2: Evaluación con preprocesamiento}
+    Se aplicaron las configuraciones de preprocesamiento óptimas (sección anterior) y se re-evaluaron los modelos, verificando mejoras en MAE.
+    \subsubsection{Etapa 3: Búsqueda de hiperparámetros}
+    Para XGBoost, LightGBM y MLPRegressor, se realizó \textbf{RandomizedSearchCV} explorando combinaciones de hiperparámetros clave:
+    \begin{itemize}
+        \item \textbf{XGBoost/LightGBM}: \texttt{n\_estimators}, \texttt{max\_depth}, \texttt{learning\_rate}, \texttt{subsample}, \texttt{colsample\_bytree}, \texttt{reg\_alpha}, \texttt{reg\_lambda}
+        \item \textbf{MLP}: número de capas, neuronas por capa, \texttt{learning\_rate\_init}, \texttt{alpha} (regularización)
+    \end{itemize}
+    Se realizó una búsqueda independiente para cada versión del dataset (completo, normal, outliers).
+    \subsubsection{Etapa 4: Entrenamiento del clasificador}
+    Para el modelo híbrido, se entrenó un XGBClassifier para predecir si una propiedad pertenece al segmento de outliers, optimizando F1-score mediante RandomizedSearchCV.
+    \subsubsection{Etapa 5: Evaluación final}
+    Todos los modelos candidatos (mejor XGBoost, mejor LightGBM, mejor MLP, modelo híbrido) se evaluaron sobre el \textbf{test set} (nunca visto durante entrenamiento ni tuning) para seleccionar el modelo final.
+    \subsection{Análisis explicativo}
+    Una vez seleccionado el modelo final, se calcularon valores SHAP sobre el test set para:
+    \begin{itemize}
+        \item Obtener un ranking global de importancia de features
+        \item Determinar el impacto de cada amenity sobre el precio
+        \item Analizar cómo varía el impacto de cada amenity según la zona geográfica
+        \item Graficar el impacto sobre el precio para features continuas y discretas
+    \end{itemize}
+
+% ============================================================
+% SECCIÓN: RESULTADOS
+% ============================================================
+
+    \section{Resultados}
+
+    \subsection{Comparación de modelos}
+
+    Se evaluaron cinco configuraciones de modelos sobre el conjunto de test: (1) \textbf{Baseline}, un XGBoost con parámetros por defecto sin preprocesamiento; (2) \textbf{Baseline + Preprocesamiento}, aplicando el pipeline óptimo; (3) \textbf{XGBoost Optimizado}, con hiperparámetros ajustados mediante RandomizedSearchCV; (4) \textbf{XGBoost Híbrido}, el modelo de dos etapas (clasificador + regresores especializados); y (5) \textbf{Red Neuronal (MLP)}, un MLPRegressor con arquitectura optimizada. Los modelos lineales (Lasso, Ridge) y el DummyRegressor fueron descartados por su rendimiento significativamente inferior.
+
+    La Tabla~\ref{tab:resultados} resume las métricas obtenidas. El modelo híbrido obtiene el mejor MAE (23,314) y MedAE (934), superando ampliamente al resto. Sin embargo, el XGBoost optimizado presenta un RMSE ligeramente menor (294,633 vs 311,949), evidenciando el trade-off entre ambas métricas. Este comportamiento confirma nuestra hipótesis: el modelo híbrido predice con mayor precisión las propiedades del segmento masivo (reflejado en MAE y MedAE), pero comete errores más grandes en outliers extremos, penalizando el RMSE.
+
+    \begin{table}[H]
+        \centering
+        \begin{tabular}{lccccc}
+            \toprule
+            \textbf{Métrica} & \textbf{Híbrido} & \textbf{Optimizado} & \textbf{Base+Prep.} & \textbf{Baseline} & \textbf{MLP} \\
+            \midrule
+            MAE     & \textbf{23,314}  & 45,515    & 86,913   & 89,264   & 120,395 \\
+            RMSE    & 311,949          & \textbf{294,633} & 362,433  & 364,441  & 632,914 \\
+            R²      & 0.760            & \textbf{0.786}   & 0.676    & 0.672    & 0.011 \\
+            MedAE   & \textbf{934}     & 8,360     & 34,746   & 35,022   & 59,782 \\
+            \bottomrule
+        \end{tabular}
+        \caption{Métricas de evaluación en el conjunto de test. En negrita el mejor valor por métrica. El modelo híbrido domina en MAE y MedAE, mientras que XGBoost optimizado obtiene mejor RMSE y R².}
+        \label{tab:resultados}
+    \end{table}
+
+    La Figura~\ref{fig:comparacion} visualiza esta comparación. Es notable la excepcional performance del modelo híbrido en MedAE (mediana del error absoluto), siendo casi 9 veces menor que el XGBoost optimizado. Esto demuestra que el 50\% de las predicciones del modelo híbrido tienen un error menor a \$934, ilustrando el fuerte impacto de los outliers sobre las métricas basadas en la media.
+
+    \begin{figure}[t]
+        \centering
+        \includegraphics[width=\linewidth]{plots/01-comparacion-final.png}
+        \caption{Comparación de MAE y RMSE entre modelos. El modelo híbrido obtiene el menor MAE, mientras que XGBoost optimizado logra el menor RMSE.}
+        \label{fig:comparacion}
+    \end{figure}
+
+    Un resultado inesperado es el pobre desempeño del MLP, incluso inferior al baseline sin preprocesamiento. Esto refleja la conocida superioridad de los modelos de gradient boosting en datos tabulares estructurados: XGBoost maneja naturalmente features heterogéneas (numéricas, categóricas, booleanas), captura interacciones complejas sin requerir feature engineering manual, y es robusto a diferentes escalas. Las redes neuronales, en cambio, requieren mayor volumen de datos, arquitecturas cuidadosamente diseñadas y son más sensibles a la distribución de las features para alcanzar rendimiento competitivo en este tipo de problemas.
+
+    \subsection{Análisis de predicciones}
+
+    La Figura~\ref{fig:scatter} muestra el scatter plot de predicciones vs valores reales del modelo híbrido en escala logarítmica. La mayoría de los puntos se alinean a lo largo de la diagonal, indicando buena capacidad predictiva general. Sin embargo, se identifican dos nubes anómalas alejadas de la diagonal:
+
+    \begin{itemize}
+        \item \textbf{Subestimación extrema} (abajo-derecha): Propiedades con precios reales entre \$1,000,000 y \$20,000,000 que fueron predichas entre \$10,000 y \$100,000. Corresponden a propiedades de ultra-lujo que el modelo no logra capturar.
+        \item \textbf{Sobreestimación extrema} (arriba-izquierda): Propiedades con precios reales entre \$5,000 y \$10,000 predichas entre \$1,000,000 y \$10,000,000. Posiblemente son propiedades con características atípicas (amenities de lujo en zonas económicas) o errores en los datos originales.
+    \end{itemize}
+
+    Este patrón confirma nuestra hipótesis central: el modelo predice con alta precisión la gran mayoría de las propiedades (segmento masivo), pero falla sistemáticamente en casos extremos que distorsionan el RMSE.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.85\linewidth]{plots/02-predictions-scatter.png}
+        \caption{Predicciones vs valores reales (escala logarítmica). La diagonal indica predicción perfecta. Las nubes alejadas corresponden a outliers sub/sobreestimados.}
+        \label{fig:scatter}
+    \end{figure}
+
+    \subsection{Análisis de overfitting}
+
+    Los modelos de XGBoost presentan una brecha notable entre las métricas de entrenamiento y test, lo cual podría sugerir sobreajuste. Sin embargo, el análisis de las curvas de aprendizaje revela un comportamiento saludable: si bien la pérdida en train continúa decreciendo, la pérdida en validación decrece asintóticamente sin aumentar. Esto indica que, aunque el modelo se ajusta progresivamente mejor a los datos de entrenamiento, esto no degrada su capacidad de generalización. La regularización implícita de XGBoost (max\_depth, min\_child\_weight, subsampling) mitiga efectivamente el overfitting.
+
+% ============================================================
+% SECCIÓN: ANÁLISIS EXPLICATIVO
+% ============================================================
+
+    \section{Análisis Explicativo}
+
+    Para interpretar las predicciones del modelo final, se calcularon valores SHAP sobre el conjunto de test, permitiendo cuantificar la contribución de cada feature a cada predicción individual.
+
+    \subsection{Importancia global de features}
+
+    La Figura~\ref{fig:importance} muestra el ranking de importancia SHAP. La \textbf{superficie construida} domina claramente, seguida por baños, gimnasio, longitud, ID de grilla y cocheras. Este resultado valida los hallazgos del EDA: el tamaño de la propiedad (superficie), la ubicación geográfica (longitud, ID grilla) y las características de habitabilidad (baños, ambientes) son los principales drivers del precio. Las amenities, con excepción de gimnasio y pileta, tienen un rol secundario en la formación de precios.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.9\linewidth]{plots/analisis-explicativo/01-feature-importance.png}
+        \caption{Importancia SHAP de features. La superficie construida es el predictor dominante, seguida por características de habitabilidad y ubicación.}
+        \label{fig:importance}
+    \end{figure}
+
+    \subsection{Impacto de amenities}
+
+    La Figura~\ref{fig:amenities} cuantifica el impacto promedio de cada amenity sobre el precio. El \textbf{gimnasio} presenta el mayor impacto positivo, seguido de amoblado y pileta. Este orden refleja tanto la escasez relativa de estas amenities como su valoración por el mercado.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.9\linewidth]{plots/analisis-explicativo/02-amenities-impact.png}
+        \caption{Impacto SHAP promedio de cada amenity sobre el precio de alquiler.}
+        \label{fig:amenities}
+    \end{figure}
+
+    El análisis por zona geográfica (Figura~\ref{fig:amenities_zona}) revela heterogeneidad en la valoración de amenities. Capital Federal y Zona Norte muestran impactos significativamente mayores que otras localidades, especialmente para gimnasio, pileta y jacuzzi. Esto sugiere que las amenities son un diferenciador de precio principalmente en mercados de alto poder adquisitivo, mientras que en zonas más económicas su influencia es marginal.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{plots/analisis-explicativo/03-amenities-impact-per-state.png}
+        \caption{Impacto de amenities por zona geográfica. Capital Federal y Zona Norte muestran mayor sensibilidad a las amenities.}
+        \label{fig:amenities_zona}
+    \end{figure}
+
+    \subsection{Efectos de features continuas}
+
+    La Figura~\ref{fig:continuas} muestra los gráficos de dependencia SHAP para las features continuas más relevantes. La \textbf{superficie construida} exhibe una relación monotónica positiva clara: a mayor superficie, mayor precio. La \textbf{longitud} presenta un comportamiento particular: relativamente estable entre -58.9 y -58.5, con un pico pronunciado alrededor de -58.35, que probablemente corresponde a desarrollos inmobiliarios premium como Nordelta u otras zonas de countries.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{plots/analisis-explicativo/06-continuous-feats-impact.png}
+        \caption{Gráficos de dependencia SHAP para features continuas. Superficie muestra relación monotónica positiva; longitud presenta un pico en zonas premium.}
+        \label{fig:continuas}
+    \end{figure}
+
+    \subsection{Efectos de features discretas}
+
+    La Figura~\ref{fig:discretas} analiza el impacto de variables discretas. La \textbf{cantidad de baños} tiene un efecto fuertemente positivo, especialmente al pasar de 3 a 4+ baños, donde el incremento en precio es sustancial. Los \textbf{ambientes} muestran un patrón similar: el salto de 4 a 5+ ambientes genera un aumento marcado en el precio predicho. Estos umbrales probablemente marcan la transición hacia propiedades de categoría premium.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{plots/analisis-explicativo/07-discrete-feats-impact.png}
+        \caption{Impacto SHAP de features discretas. Baños y ambientes muestran efectos no lineales con saltos significativos en categorías altas.}
+        \label{fig:discretas}
+    \end{figure}
+
+
+% ============================================================
+% SECCIÓN: CONCLUSIÓN Y TRABAJO FUTURO
+% ============================================================
+    \section{Conclusiones}
+    Este trabajo abordó la predicción de precios de alquiler en el AMBA utilizando un dataset de 50,000 publicaciones de Mercado Libre. El análisis exploratorio reveló dos desafíos fundamentales: (1) una distribución de precios extremadamente asimétrica con outliers que distorsionan las métricas, y (2) efectos espaciales no lineales donde la ubicación impacta el precio de forma contextual, no simplemente por coordenadas. Estas observaciones guiaron el diseño de un modelo híbrido que segmenta el mercado en propiedades ``normales'' y ``outliers'', aplicando regresores especializados para cada segmento.
+
+    Los resultados demuestran la superioridad de XGBoost sobre modelos lineales y redes neuronales en datos tabulares estructurados, confirmando hallazgos de la literatura reciente. El modelo híbrido logró el mejor MAE (23,314) y MedAE (934), mientras que el XGBoost optimizado obtuvo mejor RMSE (294,633). Este trade-off refleja una tensión inherente al problema: optimizar para el error promedio (MAE) beneficia al segmento masivo del mercado, mientras que minimizar errores cuadráticos (RMSE) prioriza reducir errores extremos en propiedades de lujo. Consideramos que el modelo híbrido es la mejor elección para aplicaciones prácticas, dado que la mayoría de las consultas corresponderían a propiedades del segmento masivo. El análisis SHAP confirmó que superficie, ubicación y características de habitabilidad son los principales drivers del precio, mientras que las amenities tienen mayor impacto en zonas de alto poder adquisitivo.
+
+    \textbf{Trabajo futuro.} Identificamos tres direcciones prometedoras: (1) \textit{Modelado basado en PCA}: utilizar las componentes principales como features podría capturar estructura latente del mercado y reducir dimensionalidad sin perder información predictiva. (2) \textit{Mejora en predicción de outliers}: las ``nubes'' del scatter plot (propiedades extremadamente sub/sobreestimadas) merecen análisis específico; identificar sus características comunes permitiría diseñar un tercer regresor especializado o aplicar técnicas de detección de anomalías para filtrar posibles errores de datos. (3) \textit{Incorporación de datos externos}: información sobre nivel socioeconómico por barrio, distancia a transporte público o índices de seguridad podrían enriquecer el modelo y mejorar la captura de efectos espaciales.
+
+
+    \appendices
+    \section{Hiperparámetros del Mejor Modelo}
+
+    En esta sección se detallan los hiperparámetros óptimos obtenidos mediante
+    \textit{random search} para los tres modelos XGBoost utilizados en este trabajo:
+    el modelo entrenado sobre propiedades normales, el modelo entrenado sobre
+    outliers y el modelo global utilizado como baseline.
+
+    \subsection{XGBoost para propiedades normales (98.5\%)}
+
+    \begin{table}[H]
+        \centering
+        \caption{Hiperparámetros óptimos para el modelo XGBoost (segmento normal).}
+        \begin{tabular}{ll}
+            \toprule
+            \textbf{Parámetro} & \textbf{Valor} \\
+            \midrule
+            colsample\_bytree    & 0.7546 \\
+            gamma                & 0.2822 \\
+            learning\_rate       & 0.06753 \\
+            max\_depth           & 14 \\
+            min\_child\_weight    & 2 \\
+            n\_estimators        & 700 \\
+            reg\_lambda          & 4.9743 \\
+            subsample            & 0.6231 \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
+
+    \subsection{XGBoost para propiedades de lujo (1.5\%)}
+
+    \begin{table}[H]
+        \centering
+        \caption{Hiperparámetros óptimos para el modelo XGBoost (segmento outliers).}
+        \begin{tabular}{ll}
+            \toprule
+            \textbf{Parámetro} & \textbf{Valor} \\
+            \midrule
+            colsample\_bytree    & 0.8134 \\
+            gamma                & 0.0001205 \\
+            learning\_rate       & 0.08237 \\
+            max\_depth           & 9 \\
+            min\_child\_weight    & 5 \\
+            n\_estimators        & 600 \\
+            reg\_lambda          & 0.07749 \\
+            subsample            & 0.6667 \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
+
+    \subsection{XGBoost global (baseline completo)}
+
+    \begin{table}[H]
+        \centering
+        \caption{Hiperparámetros óptimos para el modelo XGBoost global.}
+        \begin{tabular}{ll}
+            \toprule
+            \textbf{Parámetro} & \textbf{Valor} \\
+            \midrule
+            colsample\_bytree    & 0.7815 \\
+            gamma                & 0.1180 \\
+            learning\_rate       & 0.03205 \\
+            max\_depth           & 14 \\
+            min\_child\_weight    & 1 \\
+            n\_estimators        & 900 \\
+            reg\_lambda          & 1.2436 \\
+            subsample            & 0.8469 \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
+
+    \bibliographystyle{IEEEtran}
+% \bibliography{refs} % Descomentar si se utiliza un archivo .bib
+
+\end{document}
