@@ -981,7 +981,8 @@ def plot_cv_results(
             ax.legend()
         else:
             # Barras simples (solo test)
-            colors = sns.color_palette("viridis", len(data_sorted))
+            # Usar el palette_dict para mantener colores consistentes entre gráficos
+            colors = [palette_dict[config] for config in data_sorted.index]
 
             bars = ax.bar(
                 x_pos,
@@ -1787,3 +1788,996 @@ def plot_boolean_percentage(
     plt.grid(axis="y", linestyle="--", alpha=0.3)
 
     finalize_plot(filename)
+
+
+# ============================================================================
+# SHAP PLOTS
+# ============================================================================
+
+
+def plot_shap_feature_importance(
+    shap_values: np.ndarray,
+    feature_names: List[str],
+    top_n: int = 20,
+    filename: str = None,
+):
+    """
+    Plotea el ranking de importancia global de features usando valores SHAP.
+
+    Args:
+        shap_values: Array de valores SHAP (n_samples × n_features)
+        feature_names: Lista de nombres de features
+        top_n: Número de features más importantes a mostrar
+        filename: Nombre del archivo para guardar
+    """
+    # Calcular importancia promedio (valor absoluto)
+    importance = np.abs(shap_values).mean(axis=0)
+
+    # Crear DataFrame y ordenar
+    importance_df = (
+        pd.DataFrame({"feature": feature_names, "importance": importance})
+        .sort_values("importance", ascending=False)
+        .head(top_n)
+    )
+
+    # Mapeos específicos para features transformadas
+    shap_feature_mappings = {
+        "ITE_TIPO_PROD_S": "Tipo: Sin Clasificar",
+        "ITE_ADD_STATE_NAME_Capital Federal": "Capital Federal",
+        "ITE_TIPO_PROD_N": "A Estrenar",
+    }
+
+    # Mapear a nombres legibles (primero custom, luego COLUMN_NAMES_LEGIBLE)
+    importance_df["feature_legible"] = importance_df["feature"].map(
+        lambda x: shap_feature_mappings.get(x, COLUMN_NAMES_LEGIBLE.get(x, x))
+    )
+
+    # Plot
+    plt.figure(figsize=(10, 8))
+    colors = sns.color_palette("viridis", len(importance_df))
+
+    bars = plt.barh(
+        range(len(importance_df)),
+        importance_df["importance"],
+        color=colors,
+        edgecolor="black",
+        linewidth=1,
+    )
+
+    plt.yticks(range(len(importance_df)), importance_df["feature_legible"])
+    plt.xlabel("Importancia SHAP promedio (valor absoluto)")
+    plt.gca().invert_yaxis()
+    plt.grid(axis="x", linestyle="--", alpha=0.3)
+
+    finalize_plot(filename)
+
+
+def plot_shap_summary(
+    shap_values: np.ndarray,
+    X_transformed: np.ndarray,
+    feature_names: List[str],
+    top_n: int = 20,
+    filename: str = None,
+):
+    """
+    Genera un summary plot de SHAP mostrando la distribución de impactos.
+
+    Args:
+        shap_values: Array de valores SHAP (n_samples × n_features)
+        X_transformed: Features transformadas (n_samples × n_features)
+        feature_names: Lista de nombres de features
+        top_n: Número de features a mostrar
+        filename: Nombre del archivo para guardar
+    """
+    import shap
+
+    # Mapear nombres a versiones legibles
+    feature_names_legible = [COLUMN_NAMES_LEGIBLE.get(f, f) for f in feature_names]
+
+    plt.figure(figsize=(10, 8))
+    shap.summary_plot(
+        shap_values,
+        X_transformed,
+        feature_names=feature_names_legible,
+        max_display=top_n,
+        show=False,
+    )
+
+    finalize_plot(filename)
+
+
+def plot_shap_impact_by_zone(
+    shap_values: np.ndarray,
+    X_sample: pd.DataFrame,
+    feature_names: List[str],
+    zone_column: str,
+    features_to_analyze: List[str],
+    filename: str = None,
+):
+    """
+    Analiza el impacto de features específicas por zona geográfica.
+
+    Este es el análisis PRINCIPAL del proyecto: muestra cómo el valor de
+    cada amenity/característica varía según la zona.
+
+    Args:
+        shap_values: Array de valores SHAP (n_samples × n_features)
+        X_sample: DataFrame original (sin transformar) con columna de zona
+        feature_names: Lista de nombres de features transformadas
+        zone_column: Nombre de la columna de zona (ej: 'ITE_ADD_STATE_NAME')
+        features_to_analyze: Lista de features a analizar (ej: ['Pileta', 'Gimnasio'])
+        filename: Nombre del archivo para guardar
+    """
+    # Obtener zonas únicas
+    zonas = X_sample[zone_column].unique()
+
+    # Calcular impactos por zona
+    impactos = []
+    for zona in zonas:
+        mask_zona = X_sample[zone_column] == zona
+        n_obs_zona = mask_zona.sum()
+
+        for feature in features_to_analyze:
+            # Buscar el índice de la feature en feature_names
+            # Puede estar directamente o con prefijo (ej: 'Pileta' o 'amenities__Pileta')
+            matching_indices = [
+                i
+                for i, fname in enumerate(feature_names)
+                if feature in fname or fname.endswith(feature)
+            ]
+
+            if not matching_indices:
+                print(f"Warning: Feature '{feature}' no encontrada en feature_names")
+                continue
+
+            feature_idx = matching_indices[0]
+
+            # Verificar que la feature existe en X_sample
+            if feature not in X_sample.columns:
+                print(f"Warning: Feature '{feature}' no encontrada en X_sample")
+                continue
+
+            # Máscaras para propiedades CON y SIN la amenity EN ESTA ZONA
+            mask_con_amenity_zona = mask_zona & (X_sample[feature] == True)
+            mask_sin_amenity_zona = mask_zona & (X_sample[feature] == False)
+
+            n_con_amenity = mask_con_amenity_zona.sum()
+            n_sin_amenity = mask_sin_amenity_zona.sum()
+
+            if n_con_amenity == 0 or n_sin_amenity == 0:
+                # Si no hay suficientes datos para comparar, impacto = 0
+                efecto_diferencial = 0
+                std_diferencial = 0
+            else:
+                # Calcular impacto para propiedades CON la amenity en esta zona
+                shap_con = shap_values[mask_con_amenity_zona, feature_idx]
+                impacto_con = shap_con.mean()
+                std_con = shap_con.std()
+
+                # Calcular impacto para propiedades SIN la amenity en esta zona
+                shap_sin = shap_values[mask_sin_amenity_zona, feature_idx]
+                impacto_sin = shap_sin.mean()
+                std_sin = shap_sin.std()
+
+                # EFECTO DIFERENCIAL: ¿Cuánto vale AGREGAR la amenity en esta zona?
+                efecto_diferencial = impacto_con - impacto_sin
+                std_diferencial = np.sqrt(std_con**2 + std_sin**2)
+
+            impactos.append(
+                {
+                    "Zona": zona,
+                    "Feature": feature,
+                    "Impacto": efecto_diferencial,  # ← Ahora es efecto diferencial
+                    "Std": std_diferencial,
+                    "N_zona": n_obs_zona,
+                    "N_con": n_con_amenity,
+                    "N_sin": n_sin_amenity,
+                }
+            )
+
+    df_impactos = pd.DataFrame(impactos)
+
+    # Mapear nombres de features a versiones legibles
+    df_impactos["Feature_legible"] = df_impactos["Feature"].map(
+        lambda x: COLUMN_NAMES_LEGIBLE.get(x, x)
+    )
+
+    # Plot: Barras agrupadas por feature
+    features_legibles = df_impactos["Feature_legible"].unique()
+    n_features = len(features_legibles)
+
+    fig, ax = plt.subplots(figsize=(12, max(6, n_features * 2)))
+
+    # Configurar posiciones de barras
+    x = np.arange(len(zonas))
+    width = 0.8 / n_features
+
+    # Paleta de colores
+    colors = sns.color_palette("viridis", n_features)
+
+    # Plotear cada feature
+    for i, feature_leg in enumerate(features_legibles):
+        data = df_impactos[df_impactos["Feature_legible"] == feature_leg]
+        data = data.set_index("Zona").reindex(zonas)  # Mantener orden
+
+        positions = x + (i - n_features / 2 + 0.5) * width
+
+        bars = ax.bar(
+            positions,
+            data["Impacto"],
+            width,
+            label=feature_leg,
+            color=colors[i],
+            edgecolor="black",
+            linewidth=1,
+            alpha=0.8,
+        )
+
+        # Error bars
+        ax.errorbar(
+            positions,
+            data["Impacto"],
+            yerr=data["Std"],
+            fmt="none",
+            c="black",
+            capsize=3,
+            linewidth=1,
+            alpha=0.5,
+        )
+
+    ax.set_xlabel("Zona Geográfica", fontsize=12, fontweight="bold")
+    ax.set_ylabel(
+        "Impacto SHAP Promedio ($ constantes)", fontsize=12, fontweight="bold"
+    )
+    ax.set_title(
+        "Impacto de Características por Zona Geográfica", fontsize=14, fontweight="bold"
+    )
+    ax.set_xticks(x)
+    ax.set_xticklabels(zonas, rotation=45, ha="right")
+    ax.axhline(0, color="black", linewidth=0.8, linestyle="--", alpha=0.5)
+    ax.legend(title="Característica", loc="best")
+    ax.grid(axis="y", linestyle="--", alpha=0.3)
+
+    finalize_plot(filename)
+
+    # Retornar el DataFrame para análisis posterior
+    return df_impactos
+
+
+def plot_shap_impact_heatmap(
+    shap_values: np.ndarray,
+    X_sample: pd.DataFrame,
+    feature_names: List[str],
+    zone_column: str,
+    features_to_analyze: List[str],
+    top_n: int = None,
+    filename: str = None,
+):
+    """
+    Genera un heatmap del impacto de features por zona.
+
+    Alternativa visual al gráfico de barras agrupadas.
+
+    Args:
+        shap_values: Array de valores SHAP (n_samples × n_features)
+        X_sample: DataFrame original (sin transformar) con columna de zona
+        feature_names: Lista de nombres de features transformadas
+        zone_column: Nombre de la columna de zona
+        features_to_analyze: Lista de features a analizar
+        top_n: Número de zonas más frecuentes a mostrar (None = todas)
+        filename: Nombre del archivo para guardar
+    """
+    # Obtener zonas únicas
+    zonas = X_sample[zone_column].unique()
+
+    # Si top_n está especificado, filtrar por las zonas más frecuentes
+    if top_n is not None:
+        zona_counts = X_sample[zone_column].value_counts()
+        zonas_top = zona_counts.head(top_n).index.tolist()
+        zonas = [z for z in zonas if z in zonas_top]
+
+    # Calcular impactos por zona
+    impactos_matrix = []
+    for zona in zonas:
+        mask_zona = X_sample[zone_column] == zona
+        impactos_zona = []
+
+        for feature in features_to_analyze:
+            # Buscar índice de la feature
+            matching_indices = [
+                i
+                for i, fname in enumerate(feature_names)
+                if feature in fname or fname.endswith(feature)
+            ]
+
+            if matching_indices:
+                feature_idx = matching_indices[0]
+
+                # Calcular EFECTO DIFERENCIAL en esta zona
+                if feature in X_sample.columns:
+                    mask_con_amenity_zona = mask_zona & (X_sample[feature] == True)
+                    mask_sin_amenity_zona = mask_zona & (X_sample[feature] == False)
+
+                    n_con = mask_con_amenity_zona.sum()
+                    n_sin = mask_sin_amenity_zona.sum()
+
+                    if n_con > 0 and n_sin > 0:
+                        # Calcular efecto diferencial
+                        impacto_con = shap_values[
+                            mask_con_amenity_zona, feature_idx
+                        ].mean()
+                        impacto_sin = shap_values[
+                            mask_sin_amenity_zona, feature_idx
+                        ].mean()
+                        impacto = impacto_con - impacto_sin
+                    else:
+                        impacto = 0  # No hay suficientes datos para comparar
+                else:
+                    impacto = 0
+
+                impactos_zona.append(impacto)
+            else:
+                impactos_zona.append(0)
+
+        impactos_matrix.append(impactos_zona)
+
+    # Crear DataFrame para heatmap
+    features_legibles = [COLUMN_NAMES_LEGIBLE.get(f, f) for f in features_to_analyze]
+    df_heatmap = pd.DataFrame(impactos_matrix, index=zonas, columns=features_legibles)
+
+    # Ordenar amenities por impacto promedio (de mayor a menor)
+    impacto_promedio = df_heatmap.mean(axis=0)  # Promedio por columna (amenity)
+    orden = impacto_promedio.sort_values(ascending=False).index
+    df_heatmap = df_heatmap[orden]  # Reordenar columnas
+
+    # Crear matriz para colores (escala logarítmica)
+    # Aplicar log(|x| + 1) * sign(x) para mantener el signo
+    df_heatmap_log = df_heatmap.apply(lambda x: np.sign(x) * np.log1p(np.abs(x)))
+
+    # Función para formatear valores en pesos (estilo español)
+    def format_pesos(x):
+        if x == 0:
+            return "$0"
+        elif x > 0:
+            return f"+${x:,.0f}".replace(",", ".")
+        else:
+            return f"-${abs(x):,.0f}".replace(",", ".")
+
+    # Crear anotaciones con formato de pesos
+    annot_matrix = df_heatmap.T.applymap(format_pesos)
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    # Usar df_heatmap_log para colores, pero anotar con valores reales
+    heatmap = sns.heatmap(
+        df_heatmap_log.T,  # Transponer: features en filas, zonas en columnas (escala log)
+        annot=annot_matrix,  # Anotar con valores reales en pesos
+        fmt="",  # No formatear (ya está formateado en annot_matrix)
+        cmap="RdYlGn",
+        center=0,
+        cbar_kws={"label": "Impacto (pesos)"},
+        linewidths=0.5,
+        linecolor="gray",
+        ax=ax,
+    )
+
+    # Modificar colorbar para mostrar valores redondos en pesos
+    colorbar = heatmap.collections[0].colorbar
+
+    # Definir valores redondos que queremos mostrar (en pesos reales)
+    valores_redondos = [-10000, -1000, -100, -10, 0, 10, 100, 1000, 10000]
+
+    # Convertir a escala logarítmica: sign(x) * log1p(|x|)
+    ticks_log = [
+        np.sign(val) * np.log1p(np.abs(val)) if val != 0 else 0
+        for val in valores_redondos
+    ]
+
+    # Filtrar solo los que están dentro del rango de la colorbar
+    vmin, vmax = colorbar.vmin, colorbar.vmax
+    ticks_filtrados = []
+    labels_filtrados = []
+
+    for tick_log, val_real in zip(ticks_log, valores_redondos):
+        if vmin <= tick_log <= vmax:
+            ticks_filtrados.append(tick_log)
+            labels_filtrados.append(format_pesos(val_real))
+
+    # Aplicar los ticks personalizados
+    colorbar.set_ticks(ticks_filtrados)
+    colorbar.set_ticklabels(labels_filtrados)
+
+    plt.xlabel("Zona Geográfica", fontsize=12, fontweight="bold")
+    plt.ylabel("Amenity", fontsize=12, fontweight="bold")
+    plt.xticks(rotation=45, ha="right")
+    plt.yticks(rotation=0)
+
+    finalize_plot(filename)
+
+    return df_heatmap
+
+
+def plot_shap_waterfall(
+    shap_values: np.ndarray,
+    X_transformed: np.ndarray,
+    feature_names: List[str],
+    base_value: float,
+    sample_idx: int,
+    max_display: int = 15,
+    filename: str = None,
+):
+    """
+    Genera un waterfall plot explicando una predicción individual.
+
+    Args:
+        shap_values: Array de valores SHAP (n_samples × n_features)
+        X_transformed: Features transformadas
+        feature_names: Lista de nombres de features
+        base_value: Valor base del modelo (expected_value)
+        sample_idx: Índice de la muestra a explicar
+        max_display: Número máximo de features a mostrar
+        filename: Nombre del archivo para guardar
+    """
+    import shap
+
+    # Mapear nombres a versiones legibles
+    feature_names_legible = [COLUMN_NAMES_LEGIBLE.get(f, f) for f in feature_names]
+
+    # Crear Explanation object
+    explanation = shap.Explanation(
+        values=shap_values[sample_idx],
+        base_values=base_value,
+        data=X_transformed[sample_idx],
+        feature_names=feature_names_legible,
+    )
+
+    plt.figure(figsize=(10, 8))
+    shap.waterfall_plot(explanation, max_display=max_display, show=False)
+
+    finalize_plot(filename)
+
+
+def plot_shap_amenities_impact(
+    shap_values: np.ndarray,
+    X_sample: pd.DataFrame,  # ← NUEVO: DataFrame original para filtrar
+    feature_names: List[str],
+    features_to_analyze: List[str],
+    use_median: bool = False,
+    filter_outliers: bool = False,
+    filename: str = None,
+):
+    """
+    Visualiza el impacto promedio de amenities sobre el precio (global, sin segmentar por zona).
+
+    IMPORTANTE: Calcula el EFECTO DIFERENCIAL = impacto de tener la amenity - impacto de no tenerla.
+    Esto responde: "¿Cuánto aumenta el precio si AGREGO esta amenity?"
+
+    Args:
+        shap_values: Array de valores SHAP (n_samples × n_features)
+        X_sample: DataFrame original (sin transformar) para filtrar por amenity
+        feature_names: Lista de nombres de features transformadas
+        features_to_analyze: Lista de amenities a analizar (ej: ['Pileta', 'Gimnasio'])
+        use_median: Si True, usa mediana en lugar de media (más robusto a outliers)
+        filter_outliers: Si True, filtra el 1.5% más extremo de cada lado antes de calcular
+        filename: Nombre del archivo para guardar
+    """
+    # Calcular impactos promedio
+    impactos = []
+    for feature in features_to_analyze:
+        # Buscar el índice de la feature en feature_names
+        matching_indices = [
+            i
+            for i, fname in enumerate(feature_names)
+            if feature in fname or fname.endswith(feature)
+        ]
+
+        if not matching_indices:
+            print(f"Warning: Feature '{feature}' no encontrada en feature_names")
+            continue
+
+        feature_idx = matching_indices[0]
+
+        # Verificar que la feature existe en X_sample
+        if feature not in X_sample.columns:
+            print(f"Warning: Feature '{feature}' no encontrada en X_sample")
+            continue
+
+        # Máscaras para propiedades CON y SIN la amenity
+        mask_con_amenity = X_sample[feature] == True
+        mask_sin_amenity = X_sample[feature] == False
+
+        n_con_amenity = mask_con_amenity.sum()
+        n_sin_amenity = mask_sin_amenity.sum()
+
+        if n_con_amenity == 0:
+            print(f"Warning: Ninguna propiedad tiene {feature}")
+            continue
+
+        if n_sin_amenity == 0:
+            print(f"Warning: Todas las propiedades tienen {feature}")
+            continue
+
+        # Obtener SHAP values de propiedades CON la amenity
+        shap_con = shap_values[mask_con_amenity, feature_idx]
+
+        # Obtener SHAP values de propiedades SIN la amenity
+        shap_sin = shap_values[mask_sin_amenity, feature_idx]
+
+        # Filtrar outliers si se solicita (aplicar a ambos grupos)
+        if filter_outliers:
+            # Filtrar outliers en grupo CON amenity
+            p_low_con = np.percentile(shap_con, 1.5)
+            p_high_con = np.percentile(shap_con, 98.5)
+            mask_con = (shap_con >= p_low_con) & (shap_con <= p_high_con)
+            shap_con_filtered = shap_con[mask_con]
+
+            # Filtrar outliers en grupo SIN amenity
+            p_low_sin = np.percentile(shap_sin, 1.5)
+            p_high_sin = np.percentile(shap_sin, 98.5)
+            mask_sin = (shap_sin >= p_low_sin) & (shap_sin <= p_high_sin)
+            shap_sin_filtered = shap_sin[mask_sin]
+        else:
+            shap_con_filtered = shap_con
+            shap_sin_filtered = shap_sin
+
+        # Calcular impacto promedio para cada grupo (media o mediana)
+        if use_median:
+            impacto_con = np.median(shap_con_filtered)
+            impacto_sin = np.median(shap_sin_filtered)
+        else:
+            impacto_con = shap_con_filtered.mean()
+            impacto_sin = shap_sin_filtered.mean()
+
+        # EFECTO DIFERENCIAL: ¿Cuánto vale AGREGAR la amenity?
+        efecto_diferencial = impacto_con - impacto_sin
+
+        # Calcular desviación estándar del efecto diferencial (propagación de errores)
+        std_con = shap_con_filtered.std()
+        std_sin = shap_sin_filtered.std()
+        std_diferencial = np.sqrt(std_con**2 + std_sin**2)
+
+        impactos.append(
+            {
+                "Feature": feature,
+                "Impacto": efecto_diferencial,  # ← Ahora es efecto diferencial
+                "Std": std_diferencial,
+                "N_con": n_con_amenity,
+                "N_sin": n_sin_amenity,
+            }
+        )
+
+    df_impactos = pd.DataFrame(impactos)
+
+    # Mapear nombres a versiones legibles
+    df_impactos["Feature_legible"] = df_impactos["Feature"].map(
+        lambda x: COLUMN_NAMES_LEGIBLE.get(x, x)
+    )
+
+    # Ordenar por impacto (de mayor a menor)
+    df_impactos = df_impactos.sort_values("Impacto", ascending=False)
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    x = np.arange(len(df_impactos))
+
+    # Colores: verde para positivo, rojo para negativo
+    colors = ["#2ecc71" if imp > 0 else "#e74c3c" for imp in df_impactos["Impacto"]]
+
+    bars = ax.bar(
+        x,
+        df_impactos["Impacto"],
+        color=colors,
+        edgecolor="black",
+        linewidth=1,
+        alpha=0.8,
+    )
+
+    # Error bars
+    ax.errorbar(
+        x,
+        df_impactos["Impacto"],
+        yerr=df_impactos["Std"],
+        fmt="none",
+        c="black",
+        capsize=5,
+        linewidth=1.5,
+        alpha=0.6,
+    )
+
+    # Agregar valores sobre las barras
+    for i, (idx, row) in enumerate(df_impactos.iterrows()):
+        value = row["Impacto"]
+        ax.text(
+            i,
+            value + (row["Std"] if value > 0 else -row["Std"]),
+            f"${value:,.0f}",
+            ha="center",
+            va="bottom" if value > 0 else "top",
+            fontsize=9,
+            fontweight="bold",
+        )
+
+    ax.set_ylabel("Impacto Promedio (pesos)", fontsize=12, fontweight="bold")
+    ax.set_xticks(x)
+    ax.set_xticklabels(df_impactos["Feature_legible"], rotation=45, ha="right")
+    ax.axhline(0, color="black", linewidth=0.8, linestyle="--", alpha=0.5)
+    ax.grid(axis="y", linestyle="--", alpha=0.3)
+
+    finalize_plot(filename)
+
+    # Retornar el DataFrame para análisis posterior
+    return df_impactos
+
+
+# ============================================================================
+# SHAP PLOTS - FEATURES NUMÉRICAS (CONTINUAS Y DISCRETAS)
+# ============================================================================
+
+
+def plot_shap_dependence_grid(
+    shap_values: np.ndarray,
+    X_transformed: np.ndarray,
+    feature_names: List[str],
+    features_to_plot: List[str],
+    n_cols: int = 2,
+    filter_outliers: bool = False,
+    filename: str = None,
+):
+    """
+    Genera una grilla de dependence plots para features continuas.
+
+    Muestra cómo el impacto SHAP varía según el valor de cada feature.
+
+    Args:
+        shap_values: Array de valores SHAP (n_samples × n_features)
+        X_transformed: Array de features transformadas
+        feature_names: Lista de nombres de features
+        features_to_plot: Lista de features continuas a analizar
+        n_cols: Número de columnas en la grilla
+        filter_outliers: Si True, filtra el 2.5% más extremo antes de plotear
+        filename: Nombre del archivo para guardar
+    """
+    import shap
+
+    n_features = len(features_to_plot)
+    n_rows = math.ceil(n_features / n_cols)
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 5 * n_rows))
+    axes = axes.flatten() if n_features > 1 else [axes]
+
+    for i, feature in enumerate(features_to_plot):
+        ax = axes[i]
+
+        # Buscar índice de la feature
+        matching_indices = [
+            j
+            for j, fname in enumerate(feature_names)
+            if feature in fname or fname.endswith(feature)
+        ]
+
+        if not matching_indices:
+            ax.set_title(f"'{feature}' no encontrada")
+            ax.set_visible(False)
+            continue
+
+        feature_idx = matching_indices[0]
+
+        # Obtener valores (manejar tanto DataFrame como numpy array)
+        if hasattr(X_transformed, "iloc"):
+            # Es un DataFrame
+            feature_values = X_transformed.iloc[:, feature_idx].values
+        else:
+            # Es un numpy array
+            feature_values = X_transformed[:, feature_idx]
+
+        shap_feature = shap_values[:, feature_idx]
+
+        # Filtrar outliers si se solicita
+        if filter_outliers:
+            # Filtrar el 1.5% de valores más altos de la feature
+            p_high_x = np.percentile(feature_values, 98.5)
+
+            mask = feature_values <= p_high_x
+
+            feature_values_plot = feature_values[mask]
+            shap_feature_plot = shap_feature[mask]
+
+            feature_values_plot = feature_values[mask]
+            shap_feature_plot = shap_feature[mask]
+        else:
+            feature_values_plot = feature_values
+            shap_feature_plot = shap_feature
+
+        # Scatter plot
+        scatter = ax.scatter(
+            feature_values_plot,
+            shap_feature_plot,
+            c=feature_values_plot,
+            cmap="viridis",
+            alpha=0.5,
+            s=10,
+            edgecolors="none",
+        )
+
+        # Línea de tendencia (LOWESS)
+        try:
+            from scipy.ndimage import uniform_filter1d
+
+            # Ordenar por valor de feature
+            sort_idx = np.argsort(feature_values_plot)
+            x_sorted = feature_values_plot[sort_idx]
+            y_sorted = shap_feature_plot[sort_idx]
+
+            # Suavizar con ventana móvil
+            window = max(50, len(x_sorted) // 20)
+            y_smooth = uniform_filter1d(y_sorted, size=window, mode="nearest")
+
+            ax.plot(x_sorted, y_smooth, color="red", linewidth=2, label="Tendencia")
+        except:
+            pass  # Si falla, no mostrar línea de tendencia
+
+        # Labels
+        feature_legible = COLUMN_NAMES_LEGIBLE.get(feature, feature)
+        ax.set_xlabel(feature_legible, fontsize=10)
+        ax.set_ylabel("Impacto (pesos)", fontsize=10)
+        ax.set_title(f"{feature_legible}", fontsize=12, fontweight="bold")
+        ax.axhline(0, color="black", linestyle="--", alpha=0.3)
+        ax.grid(alpha=0.3)
+
+    # Ocultar subplots vacíos
+    for j in range(i + 1, len(axes)):
+        axes[j].set_visible(False)
+
+    finalize_plot(filename)
+
+
+def plot_shap_discrete_boxplots(
+    shap_values: np.ndarray,
+    X_sample: pd.DataFrame,
+    feature_names: List[str],
+    features_to_plot: List[str],
+    n_cols: int = 2,
+    filter_outliers: bool = False,
+    filename: str = None,
+):
+    """
+    Genera boxplots de SHAP values agrupados por valor de features discretas.
+
+    Args:
+        shap_values: Array de valores SHAP (n_samples × n_features)
+        X_sample: DataFrame original (sin transformar)
+        feature_names: Lista de nombres de features transformadas
+        features_to_plot: Lista de features discretas a analizar
+        n_cols: Número de columnas en la grilla
+        filter_outliers: Si True, filtra el 5% más extremo de SHAP values
+        filename: Nombre del archivo para guardar
+    """
+    n_features = len(features_to_plot)
+    n_rows = math.ceil(n_features / n_cols)
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 5 * n_rows))
+    axes = axes.flatten() if n_features > 1 else [axes]
+
+    for i, feature in enumerate(features_to_plot):
+        ax = axes[i]
+
+        # Buscar índice de la feature
+        matching_indices = [
+            j
+            for j, fname in enumerate(feature_names)
+            if feature in fname or fname.endswith(feature)
+        ]
+
+        if not matching_indices:
+            ax.set_title(f"'{feature}' no encontrada")
+            ax.set_visible(False)
+            continue
+
+        if feature not in X_sample.columns:
+            ax.set_title(f"'{feature}' no en X_sample")
+            ax.set_visible(False)
+            continue
+
+        feature_idx = matching_indices[0]
+
+        # Filtrar outliers: excluir el 1.5% de valores más altos de la feature
+        if filter_outliers:
+            p_high = np.percentile(X_sample[feature].dropna(), 98.5)
+            mask_no_outliers = X_sample[feature] <= p_high
+        else:
+            mask_no_outliers = pd.Series([True] * len(X_sample), index=X_sample.index)
+
+        # Obtener valores únicos ordenados (después del filtro)
+        valores_unicos = sorted(
+            X_sample.loc[mask_no_outliers, feature].dropna().unique()
+        )
+
+        # Preparar datos para boxplot
+        data_to_plot = []
+        labels = []
+
+        for valor in valores_unicos:
+            mask = (X_sample[feature] == valor) & mask_no_outliers
+            shap_grupo = shap_values[mask.values, feature_idx]
+
+            if len(shap_grupo) > 0:
+                data_to_plot.append(shap_grupo)
+                labels.append(str(int(valor)) if valor == int(valor) else str(valor))
+
+        # Boxplot
+        bp = ax.boxplot(data_to_plot, labels=labels, patch_artist=True)
+
+        # Colorear con viridis
+        colors = plt.cm.viridis(np.linspace(0, 1, len(data_to_plot)))
+        for patch, color in zip(bp["boxes"], colors):
+            patch.set_facecolor(color)
+            patch.set_alpha(0.7)
+
+        # Agregar línea de tendencia (medianas)
+        medianas = [np.median(d) for d in data_to_plot]
+        ax.plot(
+            range(1, len(medianas) + 1),
+            medianas,
+            "r-o",
+            linewidth=2,
+            markersize=6,
+            label="Mediana",
+        )
+
+        # Labels
+        feature_legible = COLUMN_NAMES_LEGIBLE.get(feature, feature)
+        ax.set_xlabel(feature_legible, fontsize=10)
+        ax.set_ylabel("Impacto SHAP ($)", fontsize=10)
+        ax.set_title(f"Impacto por {feature_legible}", fontsize=12, fontweight="bold")
+        ax.axhline(0, color="black", linestyle="--", alpha=0.5)
+        ax.grid(axis="y", alpha=0.3)
+
+    # Ocultar subplots vacíos
+    for j in range(i + 1, len(axes)):
+        axes[j].set_visible(False)
+
+    plt.suptitle(
+        "Impacto de Features Discretas sobre el Precio",
+        fontsize=14,
+        fontweight="bold",
+        y=1.02,
+    )
+
+    finalize_plot(filename)
+
+
+def plot_shap_discrete_impact_bars(
+    shap_values: np.ndarray,
+    X_sample: pd.DataFrame,
+    feature_names: List[str],
+    features_to_plot: List[str],
+    n_cols: int = 2,
+    filter_outliers: bool = False,
+    filename: str = None,
+):
+    """
+    Genera gráficos de barras mostrando el impacto promedio por cada valor
+    de features discretas (con incremento marginal).
+
+    Args:
+        shap_values: Array de valores SHAP (n_samples × n_features)
+        X_sample: DataFrame original (sin transformar)
+        feature_names: Lista de nombres de features transformadas
+        features_to_plot: Lista de features discretas a analizar
+        n_cols: Número de columnas en la grilla
+        filter_outliers: Si True, filtra outliers antes de calcular promedio
+        filename: Nombre del archivo para guardar
+    """
+    n_features = len(features_to_plot)
+    n_rows = math.ceil(n_features / n_cols)
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 5 * n_rows))
+    axes = axes.flatten() if n_features > 1 else [axes]
+
+    resultados_all = {}
+
+    for i, feature in enumerate(features_to_plot):
+        ax = axes[i]
+
+        # Buscar índice de la feature
+        matching_indices = [
+            j
+            for j, fname in enumerate(feature_names)
+            if feature in fname or fname.endswith(feature)
+        ]
+
+        if not matching_indices:
+            ax.set_title(f"'{feature}' no encontrada")
+            ax.set_visible(False)
+            continue
+
+        if feature not in X_sample.columns:
+            ax.set_title(f"'{feature}' no en X_sample")
+            ax.set_visible(False)
+            continue
+
+        feature_idx = matching_indices[0]
+
+        # Filtrar outliers: excluir el 1.5% de valores más altos de la feature
+        if filter_outliers:
+            p_high = np.percentile(X_sample[feature].dropna(), 98.5)
+            mask_no_outliers = X_sample[feature] <= p_high
+        else:
+            mask_no_outliers = pd.Series([True] * len(X_sample), index=X_sample.index)
+
+        # Obtener valores únicos ordenados (después del filtro)
+        valores_unicos = sorted(
+            X_sample.loc[mask_no_outliers, feature].dropna().unique()
+        )
+
+        # Calcular impacto promedio por valor
+        impactos = []
+        stds = []
+        counts = []
+
+        for valor in valores_unicos:
+            mask = (X_sample[feature] == valor) & mask_no_outliers
+            shap_grupo = shap_values[mask.values, feature_idx]
+
+            impactos.append(shap_grupo.mean())
+            stds.append(shap_grupo.std())
+            counts.append(len(shap_grupo))
+
+        # Crear labels
+        labels = [str(int(v)) if v == int(v) else str(v) for v in valores_unicos]
+
+        # Colores: verde si positivo, rojo si negativo
+        colors = ["#2ecc71" if imp > 0 else "#e74c3c" for imp in impactos]
+
+        # Barras
+        x = np.arange(len(valores_unicos))
+        bars = ax.bar(x, impactos, color=colors, edgecolor="black", alpha=0.8)
+
+        # Error bars
+        ax.errorbar(
+            x,
+            impactos,
+            yerr=stds,
+            fmt="none",
+            c="black",
+            capsize=4,
+            linewidth=1,
+            alpha=0.6,
+        )
+
+        # Agregar valores sobre las barras
+        for j, (val, imp) in enumerate(zip(valores_unicos, impactos)):
+            ax.text(
+                j,
+                imp + (stds[j] if imp > 0 else -stds[j]),
+                f"${imp:,.0f}",
+                ha="center",
+                va="bottom" if imp > 0 else "top",
+                fontsize=8,
+                fontweight="bold",
+            )
+
+        # Labels
+        feature_legible = COLUMN_NAMES_LEGIBLE.get(feature, feature)
+        ax.set_xlabel(feature_legible, fontsize=10)
+        ax.set_ylabel("Impacto promedio (pesos)", fontsize=10)
+        ax.set_title(f"{feature_legible}", fontsize=12, fontweight="bold")
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels)
+        ax.axhline(0, color="black", linestyle="--", alpha=0.5)
+        ax.grid(axis="y", alpha=0.3)
+
+        # Guardar resultados
+        resultados_all[feature] = pd.DataFrame(
+            {"Valor": valores_unicos, "Impacto": impactos, "Std": stds, "N": counts}
+        )
+
+    # Ocultar subplots vacíos
+    for j in range(i + 1, len(axes)):
+        axes[j].set_visible(False)
+
+    finalize_plot(filename)
+
+    return resultados_all
