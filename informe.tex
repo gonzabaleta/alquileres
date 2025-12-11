@@ -193,14 +193,9 @@ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
     \subsubsection{Etapa 2: Evaluación con preprocesamiento}
     Se aplicaron las configuraciones de preprocesamiento óptimas (sección anterior) y se re-evaluaron los modelos, verificando mejoras en MAE.
     \subsubsection{Etapa 3: Búsqueda de hiperparámetros}
-    Para XGBoost, LightGBM y MLPRegressor, se realizó \textbf{RandomizedSearchCV} explorando combinaciones de hiperparámetros clave:
-    \begin{itemize}
-        \item \textbf{XGBoost/LightGBM}: \texttt{n\_estimators}, \texttt{max\_depth}, \texttt{learning\_rate}, \texttt{subsample}, \texttt{colsample\_bytree}, \texttt{reg\_alpha}, \texttt{reg\_lambda}
-        \item \textbf{MLP}: número de capas, neuronas por capa, \texttt{learning\_rate\_init}, \texttt{alpha} (regularización)
-    \end{itemize}
-    Se realizó una búsqueda independiente para cada versión del dataset (completo, normal, outliers).
+    Para XGBoost, LightGBM y MLPRegressor, se realizó \textbf{RandomizedSearchCV} explorando combinaciones de hiperparámetros clave. Los espacios de búsqueda específicos y los hiperparámetros óptimos obtenidos se detallan en el Apéndice (Tablas~\ref{tab:xgb_regressors}-\ref{tab:search_xgb_outliers}). Para el dataset de outliers se utilizó una estrategia de regularización más agresiva (mayor \texttt{min\_child\_weight}, mayor \texttt{reg\_lambda}) dada la menor cantidad de muestras disponibles.
     \subsubsection{Etapa 4: Entrenamiento del clasificador}
-    Para el modelo híbrido, se entrenó un XGBClassifier para predecir si una propiedad pertenece al segmento de outliers, optimizando F1-score mediante RandomizedSearchCV.
+    Para el modelo híbrido, se entrenó un XGBClassifier para predecir si una propiedad pertenece al segmento de outliers, optimizando F1-score mediante RandomizedSearchCV. Los hiperparámetros óptimos incluyen \texttt{scale\_pos\_weight}=65.63 para balancear las clases desbalanceadas (Tabla~\ref{tab:xgb_classifier}).
     \subsubsection{Etapa 5: Evaluación final}
     Todos los modelos candidatos (mejor XGBoost, mejor LightGBM, mejor MLP, modelo híbrido) se evaluaron sobre el \textbf{test set} (nunca visto durante entrenamiento ni tuning) para seleccionar el modelo final.
     \subsection{Análisis explicativo}
@@ -347,72 +342,129 @@ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 
 
     \appendices
-    \section{Hiperparámetros del Mejor Modelo}
+    \section{Hiperparámetros Óptimos}
 
-    En esta sección se detallan los hiperparámetros óptimos obtenidos mediante
-    \textit{random search} para los tres modelos XGBoost utilizados en este trabajo:
-    el modelo entrenado sobre propiedades normales, el modelo entrenado sobre
-    outliers y el modelo global utilizado como baseline.
+    En esta sección se detallan los hiperparámetros óptimos obtenidos mediante RandomizedSearchCV para los modelos utilizados en el modelo híbrido.
 
-    \subsection{XGBoost para propiedades normales (98.5\%)}
+    \subsection{Regresores XGBoost}
 
     \begin{table}[H]
         \centering
-        \caption{Hiperparámetros óptimos para el modelo XGBoost (segmento normal).}
-        \begin{tabular}{ll}
+        \caption{Hiperparámetros óptimos de los regresores XGBoost.}
+        \label{tab:xgb_regressors}
+        \small
+        \begin{tabular}{lccc}
             \toprule
-            \textbf{Parámetro} & \textbf{Valor} \\
+            \textbf{Parámetro} & \textbf{Normal} & \textbf{Outliers} & \textbf{Full} \\
             \midrule
-            colsample\_bytree    & 0.7546 \\
-            gamma                & 0.2822 \\
-            learning\_rate       & 0.06753 \\
-            max\_depth           & 14 \\
-            min\_child\_weight    & 2 \\
-            n\_estimators        & 700 \\
-            reg\_lambda          & 4.9743 \\
-            subsample            & 0.6231 \\
+            colsample\_bytree  & 0.7546 & 0.8134 & 0.7815 \\
+            gamma              & 0.2822 & 0.0001 & 0.1180 \\
+            learning\_rate     & 0.0675 & 0.0824 & 0.0321 \\
+            max\_depth         & 14     & 9      & 14 \\
+            min\_child\_weight  & 2      & 5      & 1 \\
+            n\_estimators      & 700    & 600    & 900 \\
+            reg\_lambda        & 4.9743 & 0.0775 & 1.2436 \\
+            subsample          & 0.6231 & 0.6667 & 0.8470 \\
             \bottomrule
         \end{tabular}
     \end{table}
 
-    \subsection{XGBoost para propiedades de lujo (1.5\%)}
+    \subsection{Clasificador XGBoost}
 
     \begin{table}[H]
         \centering
-        \caption{Hiperparámetros óptimos para el modelo XGBoost (segmento outliers).}
+        \caption{Hiperparámetros óptimos del clasificador XGBoost.}
+        \label{tab:xgb_classifier}
         \begin{tabular}{ll}
             \toprule
             \textbf{Parámetro} & \textbf{Valor} \\
             \midrule
-            colsample\_bytree    & 0.8134 \\
-            gamma                & 0.0001205 \\
-            learning\_rate       & 0.08237 \\
-            max\_depth           & 9 \\
-            min\_child\_weight    & 5 \\
-            n\_estimators        & 600 \\
-            reg\_lambda          & 0.07749 \\
-            subsample            & 0.6667 \\
+            colsample\_bytree     & 0.7792 \\
+            gamma                 & 0.2121 \\
+            learning\_rate        & 0.1822 \\
+            max\_depth            & 9 \\
+            min\_child\_weight     & 3 \\
+            n\_estimators         & 800 \\
+            reg\_alpha            & 0.0341 \\
+            reg\_lambda           & 2.3433 \\
+            scale\_pos\_weight    & 65.63 \\
+            subsample             & 0.8705 \\
             \bottomrule
         \end{tabular}
     \end{table}
 
-    \subsection{XGBoost global (baseline completo)}
+    \subsection{Red Neuronal (MLP)}
 
     \begin{table}[H]
         \centering
-        \caption{Hiperparámetros óptimos para el modelo XGBoost global.}
+        \caption{Hiperparámetros óptimos del MLPRegressor.}
+        \label{tab:mlp}
         \begin{tabular}{ll}
             \toprule
             \textbf{Parámetro} & \textbf{Valor} \\
             \midrule
-            colsample\_bytree    & 0.7815 \\
-            gamma                & 0.1180 \\
-            learning\_rate       & 0.03205 \\
-            max\_depth           & 14 \\
-            min\_child\_weight    & 1 \\
-            n\_estimators        & 900 \\
-            reg\_lambda          & 1.2436 \\
-            subsample            & 0.8469 \\
+            activation            & relu \\
+            alpha                 & 0.000198 \\
+            batch\_size           & 128 \\
+            early\_stopping       & True \\
+            hidden\_layer\_sizes  & (64, 32) \\
+            learning\_rate        & adaptive \\
+            learning\_rate\_init  & 0.002046 \\
+            max\_iter             & 120 \\
+            solver                & adam \\
+            validation\_fraction  & 0.1 \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
+
+    \section{Espacios de Búsqueda de Hiperparámetros}
+
+    Se presenta el espacio de búsqueda explorado por RandomizedSearchCV para cada configuración.
+
+    \subsection{XGBoost (Dataset Normal y Completo)}
+
+    \begin{table}[H]
+        \centering
+        \caption{Espacio de búsqueda para XGBoost en datasets normal y completo.}
+        \label{tab:search_xgb_normal}
+        \begin{tabular}{ll}
+            \toprule
+            \textbf{Parámetro} & \textbf{Rango/Valores} \\
+            \midrule
+            colsample\_bytree & Uniforme [0.6, 1.0] \\
+            gamma             & Uniforme [0.0, 0.5] \\
+            learning\_rate    & Uniforme [0.01, 0.3] \\
+            max\_depth        & Entero [6, 15] \\
+            min\_child\_weight & Entero [1, 20] \\
+            n\_estimators     & \{300, 500, 600, 800, 900, 1000\} \\
+            reg\_lambda       & Uniforme [0.0, 5.0] \\
+            subsample         & Uniforme [0.6, 1.0] \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
+
+    \subsection{XGBoost (Dataset Outliers)}
+
+    \begin{table}[H]
+        \centering
+        \caption{Espacio de búsqueda para XGBoost en dataset de outliers (regularización fuerte).}
+        \label{tab:search_xgb_outliers}
+        \small
+        \begin{tabular}{ll}
+            \toprule
+            \textbf{Parámetro} & \textbf{Rango/Valores} \\
+            \midrule
+            colsample\_bytree  & Uniforme [0.5, 0.9] \\
+            gamma              & Uniforme [0.1, 1.0] \\
+            learning\_rate     & Uniforme [0.005, 0.05] \\
+            max\_depth         & Entero [3, 8] \\
+            min\_child\_weight  & Entero [5, 30] \\
+            min\_child\_samples & Entero [3, 15] \\
+            n\_estimators      & \{500, 700, 1000, 1500\} \\
+            reg\_alpha         & Uniforme [0.5, 3.0] \\
+            reg\_lambda        & Uniforme [1.0, 5.0] \\
+            subsample          & Uniforme [0.5, 0.9] \\
+            subsample\_freq    & \{1\} \\
             \bottomrule
         \end{tabular}
     \end{table}
