@@ -259,7 +259,7 @@ def plot_geo_scatterplot(
 
     if log_scale:
         df_plot["color_values"] = np.log1p(color_data)
-        cbar_label = f"Log({legible_color_name})"
+        cbar_label = f"Log(Precio)"
     else:
         df_plot["color_values"] = color_data
         cbar_label = legible_color_name
@@ -2945,6 +2945,82 @@ def plot_holdout_results(
             ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.1f}%"))
         elif metric_key == "r2":
             ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.3f}"))
+
+    plt.tight_layout()
+    finalize_plot(filename)
+
+
+def plot_predictions_vs_actual(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    alpha: float = 0.5,
+    figsize: tuple = (10, 8),
+    log_scale: bool = False,
+    filename: str = None,
+):
+    """
+    Genera scatter plot de predicciones vs valores reales con línea de predicción perfecta.
+
+    Args:
+        y_true: Array con valores reales
+        y_pred: Array con predicciones del modelo
+        alpha: Transparencia de los puntos
+        figsize: Tamaño de la figura
+        log_scale: Si True, usa escala logarítmica en ambos ejes
+        filename: Nombre del archivo para guardar
+    """
+    # Crear figura
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # Scatter plot
+    ax.scatter(y_true, y_pred, alpha=alpha, s=30, edgecolors="black", linewidth=0.5)
+
+    # Línea de predicción perfecta (y = x)
+    min_val = min(y_true.min(), y_pred.min())
+    max_val = max(y_true.max(), y_pred.max())
+
+    ax.plot(
+        [min_val, max_val],
+        [min_val, max_val],
+        "r--",
+        linewidth=2,
+        label="Predicción perfecta",
+        alpha=0.7,
+    )
+
+    # Etiquetas
+    xlabel = "Precio Real (pesos)"
+    ylabel = "Precio Predicho (pesos)"
+    if log_scale:
+        xlabel += " - Escala Logarítmica"
+        ylabel += " - Escala Logarítmica"
+
+    ax.set_xlabel(xlabel, fontsize=12, fontweight="bold")
+    ax.set_ylabel(ylabel, fontsize=12, fontweight="bold")
+
+    # Escala Logarítmica
+    if log_scale:
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+
+        # Formatter específico para log (evita notación científica si es posible)
+        from matplotlib.ticker import FuncFormatter
+
+        formatter = FuncFormatter(lambda x, p: f"${x:,.0f}")
+        ax.xaxis.set_major_formatter(formatter)
+        ax.yaxis.set_major_formatter(formatter)
+    else:
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"${x:,.0f}"))
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"${x:,.0f}"))
+
+    # Grid
+    ax.grid(True, alpha=0.3, linestyle="--", which="both" if log_scale else "major")
+
+    # Leyenda
+    ax.legend(loc="lower right", fontsize=10)
+
+    # Aspect ratio cuadrado
+    ax.set_aspect("equal", adjustable="box")
 
     plt.tight_layout()
     finalize_plot(filename)
