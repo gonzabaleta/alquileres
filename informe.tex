@@ -17,7 +17,7 @@ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 
 \begin{document}
 
-    \title{Predicción e Interpretación de Alquileres en AMBA: Modelado Híbrido y Análisis de Drivers de Precio}
+    \title{Modelado de Alquileres en el AMBA: Enfoque Híbrido e Interpretación de Variables Explicativas}
 
     \author{\IEEEauthorblockN{Gonzalo Martín Zabaleta Ferrando}
     \IEEEauthorblockA{\textit{Universidad de San Andrés} \\
@@ -34,17 +34,19 @@ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 
     \begin{abstract}
         \noindent
-        Este trabajo aborda la predicción de precios de alquiler en el Área Metropolitana de Buenos Aires (AMBA), utilizando un \emph{dataset} de 50,000 publicaciones de Mercado Libre (2021--2022). Se desarrolló un \emph{pipeline} completo de preprocesamiento, modelado predictivo y análisis explicativo. La principal contribución es la identificación del impacto de propiedades con precios extremos (\emph{outliers}) en las métricas de evaluación, y la propuesta de una arquitectura híbrida que combina un clasificador de segmento de mercado con regresores especializados. Los resultados muestran que el enfoque híbrido logra el menor error absoluto medio (MAE: 23,314) y mediano (MedAE: 934), mejorando notablemente la precisión en el segmento masivo del mercado. Sin embargo, un modelo XGBoost único con hiperparámetros optimizados obtiene menor error cuadrático medio (RMSE), al capturar mejor los casos extremos. Este \emph{trade-off} entre MAE y RMSE refleja una tensión inherente al problema, y la elección final depende del criterio de negocio: precisión en el segmento típico vs.\ reducción de errores extremos.
+        Este trabajo aborda la predicción de precios de alquiler en el Área Metropolitana de Buenos Aires (AMBA), utilizando un \emph{dataset} de publicaciones de Mercado Libre. Se desarrolló un \emph{pipeline} completo de preprocesamiento, modelado predictivo y análisis explicativo. La principal contribución es la identificación del impacto de propiedades con precios extremos en las métricas de evaluación, y la propuesta de una arquitectura híbrida que combina un clasificador de segmento de mercado con regresores especializados. Los resultados muestran que el enfoque híbrido logra el menor error absoluto medio (MAE: 23,314) y mediano (MedAE: 934), mejorando notablemente la precisión en el segmento masivo del mercado. Sin embargo, un modelo XGBoost único con hiperparámetros optimizados obtiene el menor error cuadrático medio (RMSE), al capturar mejor los casos extremos. Este \emph{trade-off} entre MAE y RMSE refleja una dualidad del problema: precisión en el segmento promedio vs.\ reducción de errores extremos. Finalmente, mediante análisis SHAP se cuantifica la contribución de cada característica al precio, revelando que superficie, ubicación y amenities premium (gimnasio, pileta) son los principales determinantes, con impactos diferenciales según la zona geográfica.
     \end{abstract}
 
     \begin{IEEEkeywords}
-        mercado inmobiliario, aprendizaje automático, XGBoost, modelo híbrido, outliers
+        mercado inmobiliario, aprendizaje automático, XGBoost, modelado híbrido, outliers
     \end{IEEEkeywords}
 
     \section{Introducción}
-    El mercado inmobiliario de Buenos Aires presenta desafíos únicos para la tasación automática debido a la alta heterogeneidad de propiedades, la presencia de información incompleta y la existencia de un subconjunto pequeño pero influyente de propiedades de lujo con precios extremadamente altos. Estas características generan distribuciones fuertemente sesgadas y relaciones no lineales entre las variables disponibles y el precio de alquiler.
+    El mercado inmobiliario de Buenos Aires presenta desafíos únicos para la valoración automática debido a la alta heterogeneidad de propiedades, la presencia de información incompleta y la existencia de un subconjunto pequeño pero influyente de propiedades de lujo con precios extremadamente altos. Estas características generan distribuciones fuertemente sesgadas y relaciones no lineales entre las variables disponibles y el precio de alquiler.
+
     En este contexto, los modelos de regresión tradicionales quedan ``tironeados'' por las observaciones extremas: si el modelo se ajusta para capturar los precios del segmento de lujo, deteriora su rendimiento en el segmento masivo; si se optimiza para propiedades típicas, las predicciones para viviendas de lujo resultan inaceptables. Este \emph{trade-off} se manifiesta en las métricas de evaluación: minimizar el error cuadrático (RMSE) favorece reducir errores extremos, mientras que minimizar el error absoluto (MAE) prioriza la precisión promedio. Una solución habitual consiste en eliminar los \emph{outliers}, sacrificando capacidad de generalización sobre ese segmento.
-    En este trabajo proponemos una alternativa: mantener tanto las propiedades normales como las de lujo, pero modelándolas de forma diferenciada. Se desarrolla un enfoque híbrido en dos etapas: primero, un clasificador XGBoost identifica si una propiedad pertenece al segmento de lujo (percentil superior 1.5\%); luego, según la clase asignada, se aplica un regresor especializado entrenado exclusivamente en ese segmento. De esta manera, aprovechamos toda la información disponible sin que el conjunto minoritario de viviendas extremas degrade el desempeño del modelo en el segmento mayoritario. Además, utilizamos valores SHAP para interpretar las predicciones y cuantificar el impacto de cada característica sobre el precio.
+
+    En este trabajo proponemos una alternativa: mantener tanto las propiedades normales como las de lujo, pero modelándolas de forma diferenciada. La entrada de nuestro modelo consiste en características de la propiedad (superficie construida, dormitorios, baños, cocheras, amenities como gimnasio y pileta), ubicación geográfica (coordenadas, barrio, provincia) e información temporal (mes y año). Utilizamos un enfoque híbrido de dos etapas basado en XGBoost: primero, un clasificador identifica si una propiedad pertenece al segmento de lujo (percentil superior 1.5\%); luego, según la clase asignada, se aplica un regresor especializado para predecir el precio de alquiler mensual en pesos constantes. De esta manera, aprovechamos toda la información disponible sin que el conjunto minoritario de viviendas extremas degrade el desempeño del modelo en el segmento mayoritario. Adicionalmente, empleamos valores SHAP para cuantificar la contribución marginal de cada característica al precio predicho.
 
     \section{Conjunto de datos}
     El conjunto de datos proviene de anuncios de alquiler de departamentos publicados en Mercado Libre para el AMBA durante 2021--2022, dividido en un set de desarrollo (278.725 muestras) y un set de prueba (30.970 muestras): el primero se utiliza para entrenamiento, validación y selección de modelos; el segundo se reserva para la evaluación final.
@@ -341,6 +343,7 @@ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
     \textbf{Trabajo futuro.} Identificamos tres direcciones prometedoras: (1) \textit{Modelado basado en PCA}: utilizar las componentes principales como features podría capturar estructura latente del mercado y reducir dimensionalidad sin perder información predictiva. (2) \textit{Mejora en predicción de outliers}: las ``nubes'' del scatter plot (propiedades extremadamente sub/sobreestimadas) merecen análisis específico; identificar sus características comunes permitiría diseñar un tercer regresor especializado o aplicar técnicas de detección de anomalías para filtrar posibles errores de datos. (3) \textit{Incorporación de datos externos}: información sobre nivel socioeconómico por barrio, distancia a transporte público o índices de seguridad podrían enriquecer el modelo y mejorar la captura de efectos espaciales.
 
 
+    \clearpage
     \appendices
     \section{Hiperparámetros Óptimos}
 
