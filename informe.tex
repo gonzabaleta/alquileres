@@ -34,7 +34,7 @@ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 
     \begin{abstract}
         \noindent
-        Este trabajo aborda la predicción de precios de alquiler en el Área Metropolitana de Buenos Aires (AMBA), utilizando un \emph{dataset} de publicaciones de Mercado Libre. Se desarrolló un \emph{pipeline} completo de preprocesamiento, modelado predictivo y análisis explicativo. La principal contribución es la identificación del impacto de propiedades con precios extremos en las métricas de evaluación, y la propuesta de una arquitectura híbrida que combina un clasificador de segmento de mercado con regresores especializados. Los resultados muestran que el enfoque híbrido logra el menor error absoluto medio (MAE: 23,314) y mediano (MedAE: 934), mejorando notablemente la precisión en el segmento masivo del mercado. Sin embargo, un modelo XGBoost único con hiperparámetros optimizados obtiene el menor error cuadrático medio (RMSE), al capturar mejor los casos extremos. Este \emph{trade-off} entre MAE y RMSE refleja una dualidad del problema: precisión en el segmento promedio vs.\ reducción de errores extremos. Finalmente, mediante análisis SHAP se cuantifica la contribución de cada característica al precio, revelando que superficie, ubicación y amenities premium (gimnasio, pileta) son los principales determinantes, con impactos diferenciales según la zona geográfica.
+        Este trabajo aborda la predicción de alquileres en el AMBA utilizando un conjunto de datos de publicaciones de Mercado Libre. Dada la asimetría extrema de precios generada por el segmento de lujo, se propone una arquitectura híbrida que clasifica las propiedades y aplica regresores XGBoost especializados por segmento. Los resultados demuestran que este enfoque minimiza el Error Absoluto Medio (MAE: 23,314) y Mediano (MedAE: 934), superando significativamente a los modelos base en el mercado masivo. Se evidencia un \emph{trade-off} donde el modelo híbrido prioriza la precisión promedio, mientras que un regresor XGBoost único optimiza el error cuadrático (RMSE). Finalmente, mediante análisis SHAP se cuantifica la contribución de cada característica al precio, revelando que superficie, ubicación y amenities premium son los principales determinantes, con impactos diferenciales según la zona geográfica.
     \end{abstract}
 
     \begin{IEEEkeywords}
@@ -42,113 +42,65 @@ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
     \end{IEEEkeywords}
 
     \section{Introducción}
-    El mercado inmobiliario de Buenos Aires presenta desafíos únicos para la valoración automática debido a la alta heterogeneidad de propiedades, la presencia de información incompleta y la existencia de un subconjunto pequeño pero influyente de propiedades de lujo con precios extremadamente altos. Estas características generan distribuciones fuertemente sesgadas y relaciones no lineales entre las variables disponibles y el precio de alquiler.
+    El mercado inmobiliario de Buenos Aires presenta desafíos únicos para la predicción automática debido a la alta heterogeneidad de propiedades y la existencia de un subconjunto pequeño de propiedades con precios extremadamente altos. Estas características generan distribuciones fuertemente sesgadas y relaciones no complejas entre las variables y el precio de alquiler.
 
-    En este contexto, los modelos de regresión tradicionales quedan ``tironeados'' por las observaciones extremas: si el modelo se ajusta para capturar los precios del segmento de lujo, deteriora su rendimiento en el segmento masivo; si se optimiza para propiedades típicas, las predicciones para viviendas de lujo resultan inaceptables. Este \emph{trade-off} se manifiesta en las métricas de evaluación: minimizar el error cuadrático (RMSE) favorece reducir errores extremos, mientras que minimizar el error absoluto (MAE) prioriza la precisión promedio. Una solución habitual consiste en eliminar los \emph{outliers}, sacrificando capacidad de generalización sobre ese segmento.
+    En este contexto, los modelos de regresión son afectados por las observaciones extremas: si el modelo se ajusta para capturar los precios del segmento de lujo, empeora su rendimiento en el segmento masivo; si se optimiza para propiedades típicas, las predicciones para viviendas de lujo son inaceptables. Este \emph{trade-off} se manifiesta en las métricas de evaluación: minimizar el error cuadrático (RMSE) favorece reducir errores extremos, mientras que minimizar el error absoluto (MAE) prioriza la precisión promedio. Una primera solución preliminar es eliminar los \emph{outliers}, sacrificando capacidad de generalización sobre ese segmento.
 
-    En este trabajo proponemos una alternativa: mantener tanto las propiedades normales como las de lujo, pero modelándolas de forma diferenciada. La entrada de nuestro modelo consiste en características de la propiedad (superficie construida, dormitorios, baños, cocheras, amenities como gimnasio y pileta), ubicación geográfica (coordenadas, barrio, provincia) e información temporal (mes y año). Utilizamos un enfoque híbrido de dos etapas basado en XGBoost: primero, un clasificador identifica si una propiedad pertenece al segmento de lujo (percentil superior 1.5\%); luego, según la clase asignada, se aplica un regresor especializado para predecir el precio de alquiler mensual en pesos constantes. De esta manera, aprovechamos toda la información disponible sin que el conjunto minoritario de viviendas extremas degrade el desempeño del modelo en el segmento mayoritario. Adicionalmente, empleamos valores SHAP para cuantificar la contribución marginal de cada característica al precio predicho.
+    En este trabajo proponemos una alternativa: mantener tanto las propiedades normales como las de lujo, pero modelándolas de forma diferenciada. La entrada de nuestro modelo consiste en datos tabulares sobre características de la propiedad, ubicación geográfica  e información temporal. Utilizamos un enfoque híbrido de dos etapas basado en XGBoost: primero, un clasificador identifica si una propiedad pertenece al segmento de lujo (percentil superior 1.5\%); luego, según la clase asignada, se aplica un regresor especializado para predecir el precio de alquiler mensual. De esta manera, aprovechamos toda la información disponible sin que el conjunto minoritario de viviendas extremas degrade el desempeño del modelo en el segmento promedio. Finalmente, empleamos valores SHAP para analizar la contribución de cada característica al precio predicho.
+
 
     \section{Conjunto de datos}
-    El conjunto de datos proviene de anuncios de alquiler de departamentos publicados en Mercado Libre para el AMBA durante 2021--2022, dividido en un set de desarrollo (278.725 muestras) y un set de prueba (30.970 muestras): el primero se utiliza para entrenamiento, validación y selección de modelos; el segundo se reserva para la evaluación final.
-
-    La variable objetivo es el precio del alquiler expresado en pesos (constante, actualizado por inflación para los años considerados). Entre las variables de entrada (\textit{features}) se incluyen:
-    \begin{itemize}
-        \item \textbf{Características físicas}: superficie total y construida, cantidad de ambientes, dormitorios, baños, cocheras y antigüedad.
-        \item \textbf{Ubicación}: ciudad, provincia, barrio, latitud y longitud.
-        \item \textbf{Amenities}: un conjunto de variables booleanas que indican la presencia de piscina, gimnasio, seguridad, parrilla, entre otros.
-        \item \textbf{Información temporal}: mes y año de publicación del aviso.
-    \end{itemize}
-
-    Ambos conjuntos de datos se procesan a través de un \emph{pipeline} de limpieza y preprocesamiento específico para el problema, descripto en la siguiente sección.
+    El dataset contiene 309.695 publicaciones de alquiler en Mercado Libre (AMBA, 2021--2022) dividido en desarrollo (278.725 muestras) y test (30,970 muestras). La variable objetivo es el precio mensual en pesos (ajustado por inflación). Las features incluyen: características físicas (superficie, dormitorios, baños, cocheras, antigüedad), ubicación (coordenadas, barrio, localidad), amenitie (pileta, gimnasio, seguridad, etc.) e información temporal (mes, año).
 
     \subsection{Limpieza}
-    Primero se implementó un pipeline de limpieza con transformaciones determinísticas que no dependen de métricas calculadas en el set de entrenamiento:
-    \begin{itemize}
-        \item \textbf{Normalización de variables booleanas}: columnas con valores \emph{``Sí/No''}, \emph{``1/0''} o equivalentes se transforman a tipo booleano.
-        \item \textbf{Tratamiento de valores imposibles}: se reemplazan por \texttt{NaN} las superficies negativas, las superficies iguales a cero y los conteos de ambientes o dormitorios iguales a cero, que no son posibles en una propiedad.
-        \item \textbf{Consistencia entre superficies}: cuando la superficie construida supera a la superficie total se considera inconsistencia y se marca la superficie construida como faltante.
-        \item \textbf{Consistencia entre ambientes}: si el número de dormitorios supera al total de ambientes se reemplaza el valor de dormitorios por \texttt{NaN}.
-        \item \textbf{Edad del inmueble}: la variable de antigüedad se transforma a años numéricos, interpretando la categoría ``a estrenar'' como antigüedad cero.
-        \item \textbf{Variables de fecha}: a partir de la fecha de publicación se extrae el mes y año de publicación.
-    \end{itemize}
+    Se implementó un pipeline determinístico: normalización de booleanas, tratamiento de valores imposibles (superficies negativas/cero, ambientes/dormitorios en cero), consistencia entre variables relacionadas (superficie construida menor a la total, dormitorios menor a ambientes), extracción de features temporales, y eliminación de duplicados.
 
     \subsection{Análisis exploratorio}
-    \subsubsection{Distribución del precio}
-    La Figura~\ref{fig:precio_hist} muestra el histograma del precio de alquiler con la media y la mediana señaladas con líneas verticales. El gráfico está truncado en el percentil 98,5 (clipea el 1,5\% superior) para facilitar la visualización de la distribución principal, dado que los outliers extremos comprimen la escala del eje horizontal. Se observa una distribución fuertemente sesgada: la mediana ronda los 9\,000 pesos, mientras que la media supera los 27\,000 pesos. Esta diferencia indica que un porcentaje pequeño de propiedades extremadamente caras empuja hacia arriba el promedio. Esto sugiere que el dataset contiene tanto alquileres masivos (clase media) como un segmento de propiedades de lujo que distorsionan el promedio.
-    \begin{figure}[H]
+
+    \textbf{Distribución del precio.} La Figura~\ref{fig:precio_hist} muestra una distribución fuertemente sesgada, evidenciando que un pequeño porcentaje de propiedades de lujo con precios extremos distorsiona el promedio. Este patrón se repite en otras variables numéricas. Algunos outliers extremos (alquileres de \$35M) podrían ser errores, pero esto no es verificable con la información disponible.
+
+    \begin{figure}[t]
         \centering
         \includegraphics[width=\linewidth]{plots/eda/03-distribucion-precio-clipped.png}
-        \caption{Distribución del precio de alquiler truncada en el percentil 98,5. La media es considerablemente mayor que la mediana, evidenciando una cola larga y angosta de propiedades de lujo.}
+        \caption{Distribución del precio truncada en percentil 98.5. La diferencia media-mediana evidencia asimetría extrema.}
         \label{fig:precio_hist}
     \end{figure}
 
-    Este patrón de asimetría extrema se repite en otras variables numéricas, como superficie construida y cantidad de dormitorios. Si bien es razonable sospechar que parte de estos outliers corresponden a errores en los datos (por ejemplo, propiedades con más de 50 baños o alquileres de \$35.000.000 en 2022), esta hipótesis no puede verificarse con la información disponible.
-
-    Como veremos más adelante, este comportamiento implica que la función de pérdida cuadrática penalizará fuertemente los errores en el segmento de lujo, pudiendo sacrificar la precisión en el segmento masivo. Este \emph{tradeoff} es uno de los motivos principales para considerar estrategias distintas para los \emph{outliers} y para las propiedades promedio.
-
-    \subsubsection{Correlaciones entre variables}
-    La matriz de correlación de la Figura~\ref{fig:corr} (calculada sobre variables estandarizadas y con outliers truncados) revela cierta estructura en las relaciones lineales entre variables. Se identifican dos grupos de variables altamente correlacionadas entre sí y también con el precio: superficies (total y construida) por un lado, y features de habitabilidad (dormitorios, baños, ambientes) por otro. Esta redundancia implica riesgo de colinealidad en modelos lineales, aunque los modelos basados en árboles (como XGBoost) no deberían verse afectados. La antigüedad no muestra correlación sobre el precio, sugiriendo que su efecto es mínimo o altamente no lineal. Lo más sorprendente es la débil correlación entre coordenadas geográficas y precio, contradiciendo nuestra intuición. Sin embargo, como se observa en la siguiente sección, esto no indica que la ubicación sea irrelevante, sino que su efecto sobre el precio es altamente no lineal y/o contextual.
+    \textbf{Correlaciones.} La Figura~\ref{fig:corr} revela correlación entre features de superficie y de habitabilidad (dormitorios, baños, ambientes) con el precio. La antigüedad, en cambio, no correlaciona con el precio. Sorprendentemente, las coordenadas geográficas muestran correlación débil, sugiriendo relaciones altamente no-lineales entre la ubicación y el precio.
 
     \begin{figure}[H]
         \centering
         \includegraphics[width=\linewidth]{plots/eda/04-correlation-matrix-std.png}
-        \caption{Matriz de correlación (datos preprocesados). Redundancia entre superficies y entre dormitorios/baños/ambientes. Las coordenadas geográficas muestran correlación débil con precio, revelando efectos espaciales no-lineales.}
+        \caption{Matriz de correlación de features numéricas. Features de superficie y habilidad muestran alta correlación, mientras que las coordenadas muestran baja correlación lineal.}
         \label{fig:corr}
     \end{figure}
 
-    \subsubsection{Distribución geográfica}
-    Para visualizar la relación espacial entre ubicación y precio, se generó un gráfico de hexágonos (\textit{hexbin}) utilizando Matplotlib, donde cada hexágono representa el precio promedio (en escala logarítmica) de las propiedades en esa región.
+    \textbf{Distribución geográfica.} La Figura~\ref{fig:geoplot} confirma la importancia de la ubicación, a pesar de no tener correlación lineal con el precio: la zona norte y cercana al Río de la Plata concentran los precios altos. Además, hay hexágonos verdosos aislados en el conurbano que probablemente se correspondan con barrios privados y sean difíciles de captar por modelos lineales. Por último, se ven outliers muy amarillos en zonas poder adquisitivo medio que refuerzan la hipótesis de datos erróneos en propiedades con precios extremos.
 
-    La Figura~\ref{fig:geoplot} confirma que la ubicación es un factor importante del precio, y muestra una clara distribución de poder adquisitivo en el AMBA. Las zonas hacia el norte y más próximas al Río de la Plata concentran propiedades de alto valor, coherente con barrios de alto poder adquisitivo. Hacia el conurbano, se observan hexágonos verdosos aislados que posiblemente se correspondan con barrios privados. Interesantemente, algunos hexágonos amarillos vibrantes aparecen en zonas de bajo poder adquisitivo, reforzando la hipótesis de que estos outliers son errores de medición.
-
-    Este mapa nos muestra que, si bien la latitud y longitud no se correlacionan linealmente con el precio, la ubicación sí importa. El efecto es altamente no-lineal: no alcanza con moverse un grado hacia el norte para aumentar el precio, sino que importa estar dentro de regiones específicas (lo cual es especialmente cierto para los barrios privados).
-    \begin{figure}[H]
+    \begin{figure}[t]
         \centering
         \includegraphics[width=0.9\linewidth]{plots/eda/11-geo-plot.png}
-        \caption{Distribución espacial del precio promedio por región (hexbin, escala logarítmica). La concentración de precios altos en zona norte y junto al río evidencia patrones espaciales no-lineales.}
+        \caption{Distribución espacial (hexbin, escala log del color). Se observan colores más amarillos hacia el norte y hacia el río.}
         \label{fig:geoplot}
     \end{figure}
 
-    \subsubsection{Análisis de componentes principales}
-    Para explorar la estructura latente del dataset, se aplicó PCA sobre todas las variables numéricas (incluyendo booleanas codificadas como 0/1), excluyendo únicamente las categóricas puras. La Figura~\ref{fig:pca} proyecta las propiedades en las dos primeras componentes principales, coloreadas por precio en escala logarítmica.
-    Aunque no se distinguen clusters marcados, sí que hay cierto patrón: el precio aumenta marcadamente de izquierda a derecha (PC1) y sutilmente de abajo hacia arriba (PC2). Al analizar la contribución de cada variable a las componentes, se observa que PC1 captura tamaño y habitabilidad (superficie, dormitorios, ambientes), mientras que PC2 refleja ubicación geográfica. Esto confirma los hallazgos de la matriz de correlación: estas dos dimensiones son los principales explicadores del precio.
-    \begin{figure}[H]
+    \textbf{PCA.} La Figura~\ref{fig:pca} proyecta propiedades en en las dos primeras componentes principales. Se observa que el precio aumenta notablemente de izquierda a derecha (PC1) y levemente hacia arriba (PC2). Un análisis de contribución de las features a las componentes principales reveló que PC1 está relacionada principalmente con features de superficie y habitabilidad, y PC2 con features de ubicación, lo cual se condice con nuestros análisis hasta el momento.
+
+    \begin{figure}[t]
         \centering
         \includegraphics[width=0.9\linewidth]{plots/eda/12-pca-precio.png}
-        \caption{Proyección PCA coloreada por log(precio). El gradiente evidencia que PC1 y PC2 capturan parte de la variabilidad del precio, sin clusters separables.}
+        \caption{Proyección PCA coloreada por log(precio). Se observa un aumento gradual del precio hacia la derecha, sin clusters identificables.}
         \label{fig:pca}
     \end{figure}
 
     \subsection{Preprocesamiento}
 
-    Sobre el dataset limpio, se realizó un estudio de configuraciones de preprocesamiento.
+    Se evaluaron tres versiones del dataset: (1) completo, (2) sin el 1.5\% más caro, (3) solo con el 1.5\% más caro. Probando distintas configuraciones sobre los modelos baseline (Dummy, Lasso y XGBoost con configuraciones predeterminadas) se determinaron las configuraciones óptimas:
 
-    Dada la fuerte presencia de outliers identificada en el análisis exploratorio, se evaluaron tres versiones del dataset: (1) el dataset completo, (2) excluyendo el 1,5\% más caro (percentil 98,5), y (3) excluyendo el 98,5\% más barato (percentil 1,5).
+    \textbf{Árboles:} Imputación por mediana/moda, features creadas (score amenities, densidad habitaciones, ratio baños/dormitorios), ordinal encoding (barrio, ciudad), transformación $\log(\text{precio})$ en el dataset de outliers. Estos modelos requirieron mucho menos preprocesamiento que los lineales.
 
-    Para evaluar el impacto de cada configuración de preprocesamiento, se entrenaron modelos baseline (hiperparámetros por defecto) de dos familias: regresión lineal y árbol de decisión. Se compararon las métricas obtenidas en cada versión del dataset aplicando distintas transformaciones. Las configuraciones óptimas fueron:
+    \textbf{Lineales/MLP:} Además de imputación y nuevas features, se agregó transformación logarítmica de superficie y antigüedad, estandarización de todas las features numéricas, target encoding (barrio, ciudad), transformación $\log(\text{precio}+1)$ en dataset de outliers.
 
-    \begin{itemize}
-        \item \textbf{Modelos basados en árboles:}
-        \begin{itemize}
-            \item Imputación por mediana y moda
-            \item Features creadas: score de amenities, densidad de habitaciones, ratio baños/dormitorios, \% descubierto
-            \item One-hot encoding para provincia y condición
-            \item Ordinal encoding para barrio, ciudad y mes
-            \item \emph{Solo en dataset con outliers:} transformación logarítmica en el precio
-        \end{itemize}
-
-        \item \textbf{Modelos lineales y redes neuronales:}
-        \begin{itemize}
-            \item Imputación por mediana/moda
-            \item Features creadas: ídem anterior
-            \item Transformación logarítmica de superficie y antigüedad
-            \item Estandarización de todas las variables numéricas
-            \item Target encoding para barrio, ciudad e ID de grilla
-            \item One-hot encoding para provincia y condición
-            \item \emph{Dataset sin outliers:} sin transformación del target
-            \item \emph{Dataset con outliers:} $\log(y+1)$ en el target
-        \end{itemize}
-    \end{itemize}
 
 
 

@@ -86,7 +86,7 @@ def plot_correlation_heatmap(
     corr_matrix.columns = legible_names
     corr_matrix.index = legible_names
 
-    plt.figure(figsize=(12, 10))
+    plt.figure(figsize=(8, 6))
     sns.heatmap(corr_matrix, annot=True, cmap="coolwarm", fmt=".2f", linewidths=0.5)
 
     finalize_plot(filename)
@@ -269,7 +269,7 @@ def plot_geo_scatterplot(
     if sample_size and sample_size < len(df_plot):
         df_plot = df_plot.sample(n=sample_size, random_state=42)
 
-    fig, ax = plt.subplots(figsize=(12, 10))
+    fig, ax = plt.subplots(figsize=(7, 5))
     hexbin = ax.hexbin(
         x=df_plot[lon_col],
         y=df_plot[lat_col],
@@ -1486,8 +1486,8 @@ def plot_pca_scatter(
                 df_temp.loc[mask, "PC1"],
                 df_temp.loc[mask, "PC2"],
                 label=value,
-                alpha=0.6,
-                s=30,
+                alpha=0.4,
+                s=20,
                 edgecolors="none",
                 color=colors[i],
             )
