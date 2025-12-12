@@ -1,8 +1,19 @@
-from contextlib import contextmanager
-
-import joblib
+from typing import Type
 import pandas as pd
 import numpy as np
+from contextlib import contextmanager
+import joblib
+from tqdm.auto import tqdm
+
+from sklearn.metrics import (
+    mean_absolute_error,
+    mean_squared_error,
+    root_mean_squared_error,
+    r2_score,
+    mean_absolute_percentage_error,
+    median_absolute_error,
+)
+
 from sklearn.model_selection import (
     cross_validate,
     KFold,
@@ -12,10 +23,6 @@ from sklearn.model_selection import (
 )
 from sklearn.pipeline import Pipeline
 from sklearn.compose import TransformedTargetRegressor
-from sklearn.metrics import median_absolute_error
-from typing import Type
-
-from tqdm.auto import tqdm
 
 
 def _build_full_regressor(model, feature_pipeline, target_pipeline):
@@ -130,7 +137,7 @@ def evaluate_models_cv(
     results = {}
 
     if verbose:
-        print(f"\n🔄 Ejecutando {n_splits}-Fold Cross-Validation...\n")
+        print(f"\nEjecutando {n_splits}-Fold Cross-Validation...\n")
 
     for model_name, model in models.items():
         if verbose:
@@ -158,19 +165,19 @@ def evaluate_models_cv(
 
         if verbose:
             print(
-                f"  ✓ MAE:   {results[model_name]['mae_mean']:,.0f} ± {results[model_name]['mae_std']:,.0f}"
+                f"  MAE:   {results[model_name]['mae_mean']:,.0f} ± {results[model_name]['mae_std']:,.0f}"
             )
             print(
-                f"  ✓ RMSE:  {results[model_name]['rmse_mean']:,.0f} ± {results[model_name]['rmse_std']:,.0f}"
+                f"  RMSE:  {results[model_name]['rmse_mean']:,.0f} ± {results[model_name]['rmse_std']:,.0f}"
             )
             print(
-                f"  ✓ R²:    {results[model_name]['r2_mean']:.4f} ± {results[model_name]['r2_std']:.4f}"
+                f"  R²:    {results[model_name]['r2_mean']:.4f} ± {results[model_name]['r2_std']:.4f}"
             )
             print(
-                f"  ✓ MAPE:  {results[model_name]['mape_mean']:.2f}% ± {results[model_name]['mape_std']:.2f}%"
+                f"  MAPE:  {results[model_name]['mape_mean']:.2f}% ± {results[model_name]['mape_std']:.2f}%"
             )
             print(
-                f"  ✓ MedAE: {results[model_name]['medae_mean']:,.0f} ± {results[model_name]['medae_std']:,.0f}\n"
+                f"  MedAE: {results[model_name]['medae_mean']:,.0f} ± {results[model_name]['medae_std']:,.0f}\n"
             )
 
     results_df = pd.DataFrame(results).T
@@ -195,7 +202,6 @@ def tqdm_joblib(tqdm_object):
         tqdm_object.close()
 
 
-# --- Tu función modificada ---
 def grid_search_cv(
     model_class: Type,
     param_grid: dict,
@@ -209,11 +215,7 @@ def grid_search_cv(
     verbose: bool = True,
 ) -> pd.DataFrame:
     """
-    Ejecuta GridSearchCV o RandomizedSearchCV con barra de progreso (tqdm).
-
-    Args:
-        n_iter: Si None, hace GridSearchCV exhaustivo.
-                Si es un número, hace RandomizedSearchCV con n_iter combinaciones.
+    Ejecuta GridSearchCV o RandomizedSearchCV para regresores
     """
     cv = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
 
@@ -222,7 +224,6 @@ def grid_search_cv(
 
     # Crear modelo base y regressor completo
     base_model = model_class(random_state=random_state)
-    # Asumo que esta función _build_full_regressor la tenés definida en otro lado
     final_regressor = _build_full_regressor(
         base_model, feature_pipeline, target_pipeline
     )
@@ -241,7 +242,7 @@ def grid_search_cv(
 
     if verbose:
         print(
-            f"\n🔍 {search_type}: {n_combinations} combinaciones × {n_splits} folds = {total_fits} fits"
+            f"\n{search_type}: {n_combinations} combinaciones × {n_splits} folds = {total_fits} fits"
         )
         print(f"   Modelo: {model_class.__name__}\n")
 
@@ -277,14 +278,14 @@ def grid_search_cv(
             return_train_score=True,
         )
 
-    # Ejecutar fit con el context manager de tqdm
+    # tqdm para mostrar progreso
     if verbose:
         with tqdm_joblib(tqdm(desc="Optimizando", total=total_fits)):
             search.fit(X, y)
     else:
         search.fit(X, y)
 
-    # Extraer resultados con AMBAS métricas (train y test)
+    # Extraer resultados
     results = []
     for i in range(len(search.cv_results_["params"])):
         params = {
@@ -318,19 +319,8 @@ def grid_search_cv(
     results_df = pd.DataFrame(results).sort_values("mae_mean")
 
     if verbose:
-        print(f"\n✅ Mejor MAE: {-search.best_score_:,.0f}")
+        print(f"\nMejor MAE: {-search.best_score_:,.0f}")
         print(f"   Mejores params: {search.best_params_}")
-
-        # Mostrar gap de overfitting del mejor modelo
-        best_idx = results_df.index[0]
-        best_gap = results_df.loc[best_idx, "overfit_gap_%"]
-        print(f"   Overfitting gap: {best_gap:.1f}% ", end="")
-        if best_gap < 15:
-            print("✅ (excelente)")
-        elif best_gap < 30:
-            print("⚠️ (aceptable)")
-        else:
-            print("❌ (overfitting!)")
 
     return results_df
 
@@ -395,7 +385,7 @@ def classifier_search_cv(
 
     if verbose:
         print(
-            f"\n🔍 {search_type}: {n_combinations} combinaciones × {n_splits} folds = {total_fits} fits"
+            f"\n{search_type}: {n_combinations} combinaciones × {n_splits} folds = {total_fits} fits"
         )
         print(f"   Modelo: {model_class.__name__}")
         print(f"   Optimizando: {scoring_metric}\n")
@@ -472,7 +462,7 @@ def classifier_search_cv(
 
     if verbose:
         best = results_df.iloc[0]
-        print(f"\n✅ Mejor {scoring_metric}: {best[scoring_metric]:.4f}")
+        print(f"\nMejor {scoring_metric}: {best[scoring_metric]:.4f}")
         print(f"   Precision: {best['precision']:.4f} | Recall: {best['recall']:.4f}")
         print(
             f"   ROC-AUC: {best['roc_auc']:.4f} | Avg Precision: {best['avg_precision']:.4f}"
@@ -519,7 +509,7 @@ def evaluate_classifiers_cv(
     results = {}
 
     if verbose:
-        print(f"\n🔄 Ejecutando {n_splits}-Fold Stratified CV (Clasificación)...\n")
+        print(f"\nEjecutando {n_splits}-Fold Stratified CV (Clasificación)...\n")
 
     for model_name, model in models.items():
         if verbose:
@@ -582,20 +572,20 @@ def evaluate_classifiers_cv(
         }
 
         if verbose:
-            print(f"  ✓ F1:        {test_f1:.4f} ± {results[model_name]['f1_std']:.4f}")
+            print(f"  F1:        {test_f1:.4f} ± {results[model_name]['f1_std']:.4f}")
             print(
-                f"  ✓ Recall:    {test_recall:.4f} ± {results[model_name]['recall_std']:.4f}"
+                f"  Recall:    {test_recall:.4f} ± {results[model_name]['recall_std']:.4f}"
             )
             print(
-                f"  ✓ Precision: {test_precision:.4f} ± {results[model_name]['precision_std']:.4f}"
+                f"  Precision: {test_precision:.4f} ± {results[model_name]['precision_std']:.4f}"
             )
-            print(f"  ✓ ROC-AUC:   {results[model_name]['roc_auc']:.4f}\n")
+            print(f"  ROC-AUC:   {results[model_name]['roc_auc']:.4f}\n")
 
     results_df = pd.DataFrame(results).T
     return results_df.sort_values("f1", ascending=False)
 
 
-def evaluate_models_holdout(
+def evaluate_models_test(
     models: dict,
     X_train: pd.DataFrame,
     y_train: pd.Series,
@@ -606,7 +596,7 @@ def evaluate_models_holdout(
     verbose: bool = True,
 ) -> pd.DataFrame:
     """
-    Evalúa múltiples modelos usando un holdout set (train/test split).
+    Evalúa múltiples modelos usando un test set
 
     Similar a evaluate_models_cv, pero en lugar de cross-validation,
     entrena en train y evalúa en test.
@@ -622,14 +612,6 @@ def evaluate_models_holdout(
     Returns:
         DataFrame con métricas: mae, rmse, mse, r2, mape, medae
     """
-    from sklearn.metrics import (
-        mean_absolute_error,
-        mean_squared_error,
-        root_mean_squared_error,
-        r2_score,
-        mean_absolute_percentage_error,
-        median_absolute_error,
-    )
 
     results = {}
 
@@ -696,18 +678,13 @@ def evaluate_models_holdout(
         }
 
         if verbose:
-            print(f"  ✓ Test MAE:   {test_mae:,.0f}  |  Train MAE:   {train_mae:,.0f}")
+            print(f"  Test MAE:   {test_mae:,.0f}  |  Train MAE:   {train_mae:,.0f}")
+            print(f"  Test RMSE:  {test_rmse:,.0f}  |  Train RMSE:  {train_rmse:,.0f}")
+            print(f"  Test R²:    {test_r2:.4f}  |  Train R²:    {train_r2:.4f}")
+            print(f"  Test MAPE:  {test_mape:.2f}%  |  Train MAPE:  {train_mape:.2f}%")
             print(
-                f"  ✓ Test RMSE:  {test_rmse:,.0f}  |  Train RMSE:  {train_rmse:,.0f}"
+                f"  Test MedAE: {test_medae:,.0f}  |  Train MedAE: {train_medae:,.0f}"
             )
-            print(f"  ✓ Test R²:    {test_r2:.4f}  |  Train R²:    {train_r2:.4f}")
-            print(
-                f"  ✓ Test MAPE:  {test_mape:.2f}%  |  Train MAPE:  {train_mape:.2f}%"
-            )
-            print(
-                f"  ✓ Test MedAE: {test_medae:,.0f}  |  Train MedAE: {train_medae:,.0f}"
-            )
-            print(f"  ✓ Overfit gap: {overfit_gap:.2f}%\n")
 
     results_df = pd.DataFrame(results).T
     return results_df.sort_values("mae")

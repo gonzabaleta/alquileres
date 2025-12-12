@@ -4,9 +4,11 @@ from typing import Dict, List, Tuple, Union
 
 import contextily as cx
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import shap
 from sklearn.metrics import (
     mean_absolute_error,
     mean_absolute_percentage_error,
@@ -43,9 +45,6 @@ def plot_boolean_impact(
     n_cols: int = 3,
     filename: str = None,
 ):
-    """
-    Generates a grid of boxplots to analyze the impact of boolean columns on a target variable.
-    """
     n_rows = math.ceil(len(bool_cols) / n_cols)
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 6, n_rows * 5))
     axes = axes.flatten()
@@ -69,9 +68,6 @@ def plot_boolean_impact(
 def plot_correlation_heatmap(
     df: pd.DataFrame, numeric_cols: List[str] = None, filename: str = None
 ):
-    """
-    Generates and plots a correlation heatmap for the numeric columns of a DataFrame.
-    """
     if numeric_cols:
         df_numeric = df[numeric_cols]
     else:
@@ -99,9 +95,6 @@ def plot_histograms(
     clip_percentiles: Tuple[float, float] = None,
     filename: str = None,
 ):
-    """
-    Generates a grid of histograms for specified columns in a DataFrame.
-    """
     n_rows = math.ceil(len(cols) / n_cols)
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 6, n_rows * 5))
     axes = axes.flatten()
@@ -148,9 +141,6 @@ def plot_histograms(
 def plot_boxplots(
     df: pd.DataFrame, cols: List[str], n_cols: int = 3, filename: str = None
 ):
-    """
-    Generates a grid of boxplots for specified numeric columns in a DataFrame.
-    """
     n_rows = math.ceil(len(cols) / n_cols)
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 6, n_rows * 5))
     axes = axes.flatten()
@@ -178,9 +168,6 @@ def plot_bar_charts(
     top_n: int = 15,
     filename: str = None,
 ):
-    """
-    Generates a grid of bar charts for specified categorical columns.
-    """
     n_rows = math.ceil(len(cols) / n_cols)
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 8, n_rows * 6))
     axes = axes.flatten()
@@ -235,9 +222,6 @@ def plot_geo_scatterplot(
     alpha=0.5,
     filename: str = None,
 ):
-    """
-    Generates a scatter plot of geographical data, with points colored by another variable.
-    """
     lon_col, lat_col = geo_cols
 
     if not all(c in df.columns for c in [lon_col, lat_col, color_col]):
@@ -285,10 +269,8 @@ def plot_geo_scatterplot(
     ax.set_xlabel("Longitud")
     ax.set_ylabel("Latitud")
 
-    # Mejorar aspect ratio - no forzar equal que distorsiona
     ax.set_aspect("auto")
 
-    # Grid sutil para mejor orientación
     ax.grid(True, alpha=0.3, linestyle="--", linewidth=0.5)
 
     if add_basemap:
@@ -300,9 +282,6 @@ def plot_geo_scatterplot(
 def plot_median_price_impact(
     df: pd.DataFrame, bool_cols: List[str], target_col: str, filename: str = None
 ):
-    """
-    Calculates and plots the percentage impact on median price for boolean features.
-    """
     impacts = {}
     overall_median = df[target_col].median()
     for col in bool_cols:
@@ -344,9 +323,6 @@ def plot_categorical_impact(
     n_cols: int = 2,
     filename: str = None,
 ):
-    """
-    Generates a grid of bar charts showing the impact of categorical features on the median price.
-    """
     overall_median = df[target_col].median()
     n_rows = math.ceil(len(cat_cols) / n_cols)
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 8, n_rows * 6))
@@ -391,9 +367,6 @@ def plot_categorical_impact(
 def plot_feature_impact_ranking(
     df: pd.DataFrame, cat_cols: List[str], target_col: str, filename: str = None
 ):
-    """
-    Ranks and plots the overall impact of categorical features on a target variable.
-    """
     overall_median = df[target_col].median()
     impact_scores = {}
     for col in cat_cols:
@@ -434,9 +407,6 @@ def plot_missing_values(
     cat_cols: List[str] = None,
     filename: str = None,
 ):
-    """
-    Calculates and plots the percentage of missing values, coloring bars by column type.
-    """
     missing_pct = (df.isnull().sum() / len(df) * 100).sort_values(ascending=False)
     missing_pct = missing_pct[missing_pct > 0]
 
@@ -444,12 +414,11 @@ def plot_missing_values(
         print("No se encontraron valores faltantes en el DataFrame.")
         return
 
-    # Colores estilo viridis para diferentes tipos de variables
     color_map = {
-        "numeric": "#440154",  # Viridis dark purple
-        "boolean": "#31688E",  # Viridis blue
-        "categorical": "#35B779",  # Viridis green
-        "other": "#FDE725",  # Viridis yellow
+        "numeric": "#440154",
+        "boolean": "#31688E",
+        "categorical": "#35B779",
+        "other": "#FDE725",
     }
 
     col_to_type = {}
@@ -483,8 +452,6 @@ def plot_missing_values(
     plt.xticks(range(len(missing_pct)), legible_names, rotation=45, ha="right")
     plt.ylabel("Valores Faltantes (%)")
     plt.grid(axis="y", linestyle="--", alpha=0.3)
-
-    from matplotlib.patches import Patch
 
     # Traducir labels
     type_labels = {
@@ -525,9 +492,6 @@ def plot_missing_data_impact(
     exclude_cols: List[str] = None,
     filename: str = None,
 ):
-    """
-    Generates a grid of boxplots to analyze the impact of missing data on the target variable.
-    """
     df_plot = df.copy()
     df_plot[target_col] = np.log1p(df_plot[target_col])
 
@@ -602,9 +566,6 @@ def plot_interaction(
     facet_col: str,
     filename: str = None,
 ):
-    """
-    Visualizes the interaction between one or more variables and a facet variable.
-    """
     if isinstance(x_cols, str):
         x_cols = [x_cols]
 
@@ -658,9 +619,6 @@ def plot_numeric_vs_target(
     sample_size: int = 2000,
     filename: str = None,
 ):
-    """
-    Generates a grid of scatter plots for numeric features against a target variable.
-    """
     df_plot = df.copy()
     df_plot[target_col] = np.log1p(df_plot[target_col])
 
@@ -1034,8 +992,6 @@ def plot_grid_search_results(
     """
     Visualiza las mejores N configuraciones de un grid search.
 
-    MAE plot muestra top N por MAE, RMSE plot muestra top N por RMSE.
-
     Args:
         results_df: DataFrame retornado por grid_search_cv()
         top_n: Número de mejores configuraciones a mostrar (default: 10)
@@ -1082,9 +1038,7 @@ def plot_grid_search_results(
     # Ancho de barras
     bar_width = 0.35
 
-    # ============================================================
     # SUBPLOT 1: MAE (Top N por MAE)
-    # ============================================================
     ax_mae = axes[0]
     x_pos_mae = np.arange(len(top_by_mae))
 
@@ -1127,9 +1081,7 @@ def plot_grid_search_results(
     ax_mae.yaxis.grid(True, linestyle="--", alpha=0.3)
     ax_mae.set_axisbelow(True)
 
-    # ============================================================
     # SUBPLOT 2: RMSE (Top N por RMSE)
-    # ============================================================
     ax_rmse = axes[1]
     x_pos_rmse = np.arange(len(top_by_rmse))
 
@@ -1232,8 +1184,6 @@ def plot_classifier_results(
 
     fig, axes = plt.subplots(3, 2, figsize=figsize)
 
-    # Métricas para bar charts (cada una ordenada por sí misma)
-    # Usar nombres con prefijo test_
     metrics_config = [
         ("test_recall", "Top N por Recall", "coral"),
         ("test_f1", "Top N por F1", "steelblue"),
@@ -1241,9 +1191,7 @@ def plot_classifier_results(
         ("test_precision", "Top N por Precision", "goldenrod"),
     ]
 
-    # ============================================================
     # Bar charts (primeras 4 posiciones)
-    # ============================================================
     bar_positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
 
     for idx, (metric, title, color) in enumerate(metrics_config):
@@ -1296,9 +1244,7 @@ def plot_classifier_results(
                 fontsize=8,
             )
 
-    # ============================================================
     # Scatter: Precision vs Recall (color = F1)
-    # ============================================================
     ax = axes[2, 0]
     scatter = ax.scatter(
         results_df["test_precision"],
@@ -1331,9 +1277,7 @@ def plot_classifier_results(
     ax.legend()
     ax.grid(alpha=0.3)
 
-    # ============================================================
     # Scatter: ROC-AUC vs F1
-    # ============================================================
     ax = axes[2, 1]
     scatter = ax.scatter(
         results_df["test_roc_auc"],
@@ -1368,7 +1312,7 @@ def plot_classifier_results(
 
     # Imprimir resumen del mejor modelo
     print("\n" + "=" * 60)
-    print("🏆 MEJOR MODELO (por F1):")
+    print("MEJOR MODELO (por F1):")
     print("=" * 60)
     print(f"Config ID: {int(best[id_col]) if id_col else 'N/A'}")
     print(f"F1:        {best['test_f1']:.4f}")
@@ -1869,7 +1813,6 @@ def plot_shap_summary(
         top_n: Número de features a mostrar
         filename: Nombre del archivo para guardar
     """
-    import shap
 
     # Mapear nombres a versiones legibles
     feature_names_legible = [COLUMN_NAMES_LEGIBLE.get(f, f) for f in feature_names]

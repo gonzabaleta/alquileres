@@ -30,7 +30,7 @@ def get_dev_set(set_type: DevSetType) -> pd.DataFrame:
 
     Returns:
         Un DataFrame de pandas con el dataset solicitado.
-        
+
     Raises:
         KeyError: Si el set_type no es un miembro válido de DevSet.
     """
@@ -38,7 +38,9 @@ def get_dev_set(set_type: DevSetType) -> pd.DataFrame:
         path = _DEV_SET_PATHS[set_type]
         return pd.read_csv("../" + path, low_memory=False)
     except KeyError:
-        raise ValueError(f"Invalid dataset type: {set_type}. Must be one of {list(DevSetType)}")
+        raise ValueError(
+            f"Invalid dataset type: {set_type}. Must be one of {list(DevSetType)}"
+        )
 
 
 def analizar_columnas_categoricas(df: pd.DataFrame, columnas: list):
@@ -100,9 +102,6 @@ def analizar_columnas_categoricas(df: pd.DataFrame, columnas: list):
 
 
 def get_existing_columns(df: pd.DataFrame, columns: List[str]) -> List[str]:
-    """
-    Filters a list of columns, returning only those that exist in the DataFrame.
-    """
     existing_cols = [col for col in columns if col in df.columns]
     missing_cols = set(columns) - set(existing_cols)
     if missing_cols:

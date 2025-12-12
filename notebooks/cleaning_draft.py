@@ -8,7 +8,6 @@ from typing import List, Dict, NotRequired, TypedDict
 # """
 
 
-# --- Configuration Object Definition ---
 class CleaningConfig(TypedDict):
     """
     A TypedDict to define the structure of the cleaning configuration object.

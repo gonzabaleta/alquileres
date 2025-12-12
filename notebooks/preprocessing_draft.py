@@ -21,9 +21,6 @@ class PreprocessingConfig(TypedDict):
     standardize_cols: NotRequired[List[str]]
 
 
-# --- Preprocessing Functions ---
-
-
 def log_transform_features(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
     """Applies a log1p transformation to specified columns to reduce right-skewness."""
     df_processed = df.copy()
@@ -114,9 +111,6 @@ def apply_standardization(
         std_val = params["std"]
         df_processed[col] = (df_processed[col] - mean_val) / std_val
     return df_processed
-
-
-# --- Main Preprocessing Pipeline ---
 
 
 def preprocess_features(
