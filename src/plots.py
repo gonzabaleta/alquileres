@@ -1833,7 +1833,7 @@ def plot_shap_feature_importance(
     )
 
     # Plot
-    plt.figure(figsize=(10, 8))
+    plt.figure(figsize=(7, 5))
     colors = sns.color_palette("viridis", len(importance_df))
 
     bars = plt.barh(
@@ -1845,7 +1845,7 @@ def plot_shap_feature_importance(
     )
 
     plt.yticks(range(len(importance_df)), importance_df["feature_legible"])
-    plt.xlabel("Importancia SHAP promedio (valor absoluto)")
+    plt.xlabel("Importancia SHAP promedio")
     plt.gca().invert_yaxis()
     plt.grid(axis="x", linestyle="--", alpha=0.3)
 
@@ -2147,7 +2147,7 @@ def plot_shap_impact_heatmap(
     annot_matrix = df_heatmap.T.applymap(format_pesos)
 
     # Plot
-    fig, ax = plt.subplots(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=(8, 5))
 
     # Usar df_heatmap_log para colores, pero anotar con valores reales
     heatmap = sns.heatmap(
@@ -2187,9 +2187,6 @@ def plot_shap_impact_heatmap(
     # Aplicar los ticks personalizados
     colorbar.set_ticks(ticks_filtrados)
     colorbar.set_ticklabels(labels_filtrados)
-
-    plt.xlabel("Zona Geográfica", fontsize=12, fontweight="bold")
-    plt.ylabel("Amenity", fontsize=12, fontweight="bold")
     plt.xticks(rotation=45, ha="right")
     plt.yticks(rotation=0)
 
@@ -2358,7 +2355,7 @@ def plot_shap_amenities_impact(
     df_impactos = df_impactos.sort_values("Impacto", ascending=False)
 
     # Plot
-    fig, ax = plt.subplots(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=(7, 5))
 
     x = np.arange(len(df_impactos))
 
@@ -2444,7 +2441,7 @@ def plot_shap_dependence_grid(
     n_features = len(features_to_plot)
     n_rows = math.ceil(n_features / n_cols)
 
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 5 * n_rows))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(4 * n_cols, 3.5 * n_rows))
     axes = axes.flatten() if n_features > 1 else [axes]
 
     for i, feature in enumerate(features_to_plot):
@@ -2673,7 +2670,7 @@ def plot_shap_discrete_impact_bars(
     n_features = len(features_to_plot)
     n_rows = math.ceil(n_features / n_cols)
 
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 5 * n_rows))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(4 * n_cols, 3.5 * n_rows))
     axes = axes.flatten() if n_features > 1 else [axes]
 
     resultados_all = {}
@@ -2843,7 +2840,7 @@ def plot_holdout_results(
         fig, axes = plt.subplots(1, 1, figsize=(14, 9))
         axes = [axes]
     elif vertical_layout:
-        fig, axes = plt.subplots(n_metrics, 1, figsize=(8, 6 * n_metrics))
+        fig, axes = plt.subplots(n_metrics, 1, figsize=(7, 5 * n_metrics))
         if n_metrics == 1:
             axes = [axes]
     else:
@@ -2993,11 +2990,11 @@ def plot_predictions_vs_actual(
     )
 
     # Etiquetas
-    xlabel = "Precio Real (pesos)"
-    ylabel = "Precio Predicho (pesos)"
+    xlabel = "Precio Real"
+    ylabel = "Precio Predicho"
     if log_scale:
-        xlabel += " - Escala Logarítmica"
-        ylabel += " - Escala Logarítmica"
+        xlabel += " - Escala Log"
+        ylabel += " - Escala Log"
 
     ax.set_xlabel(xlabel, fontsize=12, fontweight="bold")
     ax.set_ylabel(ylabel, fontsize=12, fontweight="bold")
