@@ -135,7 +135,7 @@ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 
     Se exploraron cuatro familias de modelos: (1) \textbf{Baselines} (DummyRegressor, Lasso, Decision Tree, XGBoost, todos en configuración default), (2) \textbf{Gradient Boosting} (XGBoost y LightGBM, algoritmos de ensamble que construyen árboles secuencialmente corrigiendo errores), (3) \textbf{Redes Neuronales} (MLPRegressor con capas ocultas y activación ReLU), y (4) \textbf{Modelo Híbrido}, nuestra propuesta principal.
 
-    El modelo híbrido opera en dos etapas: un \textbf{XGBClassifier} determina si la propiedad pertenece o no al segmento de outliers (percentil superior 1.5\%); luego, un \textbf{XGBRegressor} entrenado específicamente en ese segmento predice el precio. Este enfoque evita que los outliers degraden las predicciones del segmento masivo.
+    El modelo híbrido opera en dos etapas: un \textbf{XGBClassifier} determina si la propiedad pertenece o no al segmento de outliers (percentil superior 1.5\%); luego, un \textbf{XGBRegressor} entrenado específicamente en ese segmento predice el precio. Este enfoque evita que los outliers degraden las predicciones del segmento masivo. 
 
     \subsection{Proceso de selección}
 
@@ -153,19 +153,19 @@ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 
     \textbf{Etapa 5:} Evaluación de los mejores candidatos (XGBoost, LightGBM, MLP, híbrido) sobre test set.
 
-    \subsection{Análisis explicativo con SHAP}
-    Para interpretar predicciones se utilizó la librería SHAP, que descompone cada predicción en contribuciones marginales por cada feature:
-    \begin{equation}
-        \hat{y}_i = \phi_0 + \sum_{j=1}^{M} \phi_j(x_i)
-    \end{equation}
-    donde $\phi_0$ es el valor base (predicción promedio del modelo) y $\phi_j(x_i)$ cuantifica la contribución marginal de la feature $j$ para la instancia $i$, controlando por todas las demás features. Se utilizó \texttt{TreeExplainer}, que calcula valores SHAP exactos aprovechando la estructura de árboles.
-    El análisis SHAP se aplicó de tres formas:
+\subsection{Análisis explicativo con SHAP}
+Para interpretar predicciones se utilizó la librería SHAP, que descompone cada predicción en contribuciones marginales por cada feature:
+\begin{equation}
+    \hat{y}_i = \phi_0 + \sum_{j=1}^{M} \phi_j(x_i)
+\end{equation}
+donde $\phi_0$ es el valor base (predicción promedio del modelo) y $\phi_j(x_i)$ cuantifica la contribución marginal de la feature $j$ para la instancia $i$, controlando por todas las demás features. Se utilizó \texttt{TreeExplainer}, que calcula valores SHAP exactos aprovechando la estructura de árboles.
+El análisis SHAP se aplicó de tres formas: 
 
-    \textbf{(1) Ranking global de importancia:} Se calculó el promedio de los valores SHAP absolutos ($|\phi_j|$) para cada feature sobre todo el dataset.
+\textbf{(1) Ranking global de importancia:} Se calculó el promedio de los valores SHAP absolutos ($|\phi_j|$) para cada feature sobre todo el dataset.
 
-    \textbf{(2) Impacto de amenities por zona:} Para cada amenity, se calculó la diferencia del valor SHAP promedio de propiedades que poseen la amenity versus las que no la poseen, segmentado por zona geográfica.
+\textbf{(2) Impacto de amenities por zona:} Para cada amenity, se calculó la diferencia del valor SHAP promedio de propiedades que poseen la amenity versus las que no la poseen, segmentado por zona geográfica.
 
-    \textbf{(3) Análisis de dependencia:} Para features continuas (superficie, coordenadas) y discretas (baños, dormitorios), se graficó la relación entre el valor de la feature y su contribución SHAP.
+\textbf{(3) Análisis de dependencia:} Para features continuas (superficie, coordenadas) y discretas (baños, dormitorios), se graficó la relación entre el valor de la feature y su contribución SHAP.
 
 
 % ============================================================
@@ -196,7 +196,7 @@ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
         \label{tab:resultados}
     \end{table}
 
-    La \Cref{fig:comparacion} visualiza esta comparación.
+    La \Cref{fig:comparacion} visualiza esta comparación. 
 
     \begin{figure}[H]
         \centering
@@ -206,12 +206,12 @@ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
     \end{figure}
 
     Un resultado inesperado es el pobre desempeño del MLP, incluso inferior al baseline sin preprocesamiento. Esto refleja la superioridad de XGBoost en datos tabulares: maneja features muy variadas con poco preprocesamiento (notar la casi nula diferencia entre el modelo Baseline y el preprocesado), captura interacciones complejas sin feature engineering manual, y es robusto a diferentes escalas. Las redes neuronales requieren mayor volumen de datos y arquitecturas diseñadas detalladamente. El bajo rendimiento del MLP sugiere que se requeriría un proceso de optimización de hiperparámetros más exhaustivo que el aplicado en este estudio, validando la elección de XGBoost como arquitectura base para el modelo híbrido.
-
-    En cuanto al sobreajuste, los modelos de XGBoost mostraron una brecha considerable entre métricas de entrenamiento y test. Sin embargo, las curvas de aprendizaje muestran un comportamiento aceptable: la loss en validación decrece asintóticamente sin aumentar, indicando que el modelo no pierde capacidad de generalización.
+    
+En cuanto al sobreajuste, los modelos de XGBoost mostraron una brecha considerable entre métricas de entrenamiento y test. Sin embargo, las curvas de aprendizaje muestran un comportamiento aceptable: la loss en validación decrece asintóticamente sin aumentar, indicando que el modelo no pierde capacidad de generalización.
 
     \subsection{Análisis de predicciones}
 
-    \begin{figure}[H]
+      \begin{figure}[H]
         \centering
         \includegraphics[width=0.85\linewidth]{plots/02-predictions-scatter.png}
         \caption{Predicciones vs valores reales (escala logarítmica). La diagonal indica predicción perfecta. Las nubes alejadas corresponden a outliers sub/sobreestimados.}
@@ -227,7 +227,7 @@ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 
     Este patrón confirma, una vez mas, nuestra hipótesis central: el modelo predice con alta precisión la gran mayoría de las propiedades (segmento masivo), pero falla en casos extremos que distorsionan el RMSE.
 
-
+  
 
 
 
@@ -252,7 +252,7 @@ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 
     \subsection{Impacto de amenities}
 
-    La \Cref{fig:amenities} cuantifica el impacto promedio de cada amenity sobre el precio. El \textbf{gimnasio} presenta el mayor impacto positivo, seguido de amoblado y pileta.
+    La \Cref{fig:amenities} cuantifica el impacto promedio de cada amenity sobre el precio. El \textbf{gimnasio} presenta el mayor impacto positivo, seguido de amoblado y pileta. 
 
     \begin{figure}[H]
         \centering
@@ -272,47 +272,47 @@ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
         \label{fig:amenities_zona}
     \end{figure}
 
-
+    
     \subsection{Efectos de features continuas}
 
     La \Cref{fig:continuas} muestra los gráficos de dependencia SHAP para las features continuas más relevantes (superficie y longitud). La \textbf{superficie construida} tiene una tendencia clara: a mayor superficie, mayor precio. La \textbf{longitud} presenta un comportamiento diferente: relativamente estable entre -58.9 y -58.5, con un pico pronunciado alrededor de -58.35, que probablemente corresponde con franjas verticales de alto poder adquisitivo.
 
-    \begin{figure}[H]
+      \begin{figure}[H]
         \centering
         \includegraphics[width=\linewidth]{plots/analisis-explicativo/06-continuous-feats-impact.png}
         \caption{Gráficos de dependencia SHAP para features continuas. }
         \label{fig:continuas}
     \end{figure}
 
-
+  
 
 
 % ============================================================
 % SECCIÓN: CONCLUSIÓN Y TRABAJO FUTURO
 % ============================================================
     \section{Conclusiones}
-    Este trabajo abordó la predicción de precios de alquiler en el AMBA mediante un modelo híbrido que segmenta el mercado en propiedades normales y de lujo, aplicando regresores XGBoost especializados. El análisis exploratorio reveló dos desafíos clave: distribución de precios extremadamente asimétrica y efectos espaciales no lineales difíciles de capturar.
+Este trabajo abordó la predicción de precios de alquiler en el AMBA mediante un modelo híbrido que segmenta el mercado en propiedades normales y de lujo, aplicando regresores XGBoost especializados. El análisis exploratorio reveló dos desafíos clave: distribución de precios extremadamente asimétrica y efectos espaciales no lineales difíciles de capturar.
 
-    Los resultados demuestran la superioridad de XGBoost sobre modelos lineales y redes neuronales en datos tabulares. El modelo híbrido logró el mejor MAE (23,314) y MedAE (934), mientras que XGBoost optimizado obtuvo mejor RMSE (294,633) y $R^2$ (0.786). Este trade-off refleja una tensión inherente: MAE optimiza para el segmento masivo, mientras que RMSE intenta captar el segmento de lujo, en detrimento del primero. Los resultados demuestran que el modelo híbrido es altamente superior para trabajos en el mercado masivo.
+Los resultados demuestran la superioridad de XGBoost sobre modelos lineales y redes neuronales en datos tabulares. El modelo híbrido logró el mejor MAE (23,314) y MedAE (934), mientras que XGBoost optimizado obtuvo mejor RMSE (294,633) y $R^2$ (0.786). Este trade-off refleja una tensión inherente: MAE optimiza para el segmento masivo, mientras que RMSE intenta captar el segmento de lujo, en detrimento del primero. Los resultados demuestran que el modelo híbrido es altamente superior para trabajos en el mercado masivo. 
 
-    El análisis SHAP confirmó que superficie, ubicación y habitabilidad son los principales explicadores del precio, con amenities teniendo mayor impacto en zonas de alto poder adquisitivo.
+El análisis SHAP confirmó que superficie, ubicación y habitabilidad son los principales explicadores del precio, con amenities teniendo mayor impacto en zonas de alto poder adquisitivo.
 
-    \textbf{Trabajo futuro.} Se identifican cuatro direcciones prometedoras: (1) \textit{Arquitecturas neuronales avanzadas}: explorar modelos de deep learning especializados en datos tabulares como TabNet; el bajo rendimiento del MLP sugiere que arquitecturas más sofisticadas podrían cerrar la brecha de performance contra los XGBoost. (2) \textit{Modelado basado en PCA}: utilizar componentes principales como features para capturar estructura latente y reducir dimensionalidad. (3) \textit{Detección de anomalías}: analizar las nubes del scatter plot (propiedades extremadamente sub/sobreestimadas) para diseñar un tercer regresor especializado o filtrar errores de datos. (4) \textit{Datos externos}: incorporar información socioeconómica, distancia al Río de la Plata o distancia al transporte y plazas.
+\textbf{Trabajo futuro.} Se identifican cuatro direcciones prometedoras: (1) \textit{Arquitecturas neuronales avanzadas}: explorar modelos de deep learning especializados en datos tabulares como TabNet; el bajo rendimiento del MLP sugiere que arquitecturas más sofisticadas podrían cerrar la brecha de performance contra los XGBoost. (2) \textit{Modelado basado en PCA}: utilizar componentes principales como features para capturar estructura latente y reducir dimensionalidad. (3) \textit{Detección de anomalías}: analizar las nubes del scatter plot (propiedades extremadamente sub/sobreestimadas) para diseñar un tercer regresor especializado o filtrar errores de datos. (4) \textit{Datos externos}: incorporar información socioeconómica, distancia al Río de la Plata o distancia al transporte y plazas.
 
     \begin{thebibliography}{4}
-
-        \bibitem{scikit-learn}
-        scikit-learn Developers, ``scikit-learn: Machine Learning in Python,'' Version 1.7.0, [Online]. Available: https://scikit-learn.org/stable/. [Accessed: 11-Dec-2025].
-
-        \bibitem{xgboost}
-        XGBoost Contributors, ``XGBoost: eXtreme Gradient Boosting,'' Version 3.0.2, [Online]. Available: https://xgboost.ai/. [Accessed: 11-Dec-2025].
-
-        \bibitem{pytorch}
-        PyTorch Contributors, ``PyTorch: An Imperative Style, High-Performance Deep Learning Library,'' Version 2.x, [Online]. Available: https://pytorch.org/. [Accessed: 11-Dec-2025].
-
-        \bibitem{shap}
-        S. M. Lundberg, ``SHAP (SHapley Additive exPlanations),'' [Online]. Available: https://shap.readthedocs.io/. [Accessed: 11-Dec-2025].
-
+    
+    \bibitem{scikit-learn}
+    scikit-learn Developers, ``scikit-learn: Machine Learning in Python,'' Version 1.7.0, [Online]. Available: https://scikit-learn.org/stable/. [Accessed: 11-Dec-2025].
+    
+    \bibitem{xgboost}
+    XGBoost Contributors, ``XGBoost: eXtreme Gradient Boosting,'' Version 3.0.2, [Online]. Available: https://xgboost.ai/. [Accessed: 11-Dec-2025].
+    
+    \bibitem{pytorch}
+    PyTorch Contributors, ``PyTorch: An Imperative Style, High-Performance Deep Learning Library,'' Version 2.x, [Online]. Available: https://pytorch.org/. [Accessed: 11-Dec-2025].
+    
+    \bibitem{shap}
+    S. M. Lundberg, ``SHAP (SHapley Additive exPlanations),'' [Online]. Available: https://shap.readthedocs.io/. [Accessed: 11-Dec-2025].
+    
     \end{thebibliography}
 
 
