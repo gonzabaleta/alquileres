@@ -17,6 +17,9 @@
 \usepackage{tikz}
 \usetikzlibrary{positioning,arrows.meta}
 
+% Margen de los bordes del poster
+\setbeamersize{text margin left=1.5cm, text margin right=1.5cm}
+
 % ===============================
 % Theme tweaks
 % ===============================
@@ -26,32 +29,66 @@
 % Definir color azul marino elegante
 \definecolor{navyblue}{RGB}{25, 55, 95}
 
-% Estilo de títulos de bloques: azul marino con bordes redondeados
-\setbeamercolor{block title}{fg=white,bg=navyblue}
-\setbeamercolor{block body}{fg=black,bg=white}
+% ===============================
+% Usar tcolorbox para bloques con padding controlable
+% ===============================
+\usepackage{tcolorbox}
+\tcbuselibrary{skins}
 
-% Bordes redondeados para los bloques
-\setbeamertemplate{blocks}[rounded][shadow=false]
+% Redefinir el entorno block de beamer usando tcolorbox
+\renewenvironment{block}[1]{%
+  \begin{tcolorbox}[
+    colback=white,
+    colframe=navyblue,
+    coltitle=white,
+    colbacktitle=navyblue,
+    fonttitle=\fontsize{32}{38}\selectfont\bfseries,
+    title=#1,
+    boxrule=1.5pt,       % ← GROSOR DEL BORDE (0pt = sin borde, 2pt = más grueso)
+    arc=8pt,
+    toptitle=0.5em,      % ← PADDING ARRIBA del título
+    bottomtitle=0.5em,   % ← PADDING ABAJO del título
+    left=0.5em,          % ← PADDING IZQUIERDA del título
+    right=0.5em,         % ← PADDING DERECHA del título
+    top=0.8em,           % Padding del contenido
+    bottom=0.5em,
+    after skip=2.5em,    % ← ESPACIO VERTICAL ENTRE BLOQUES
+    enhanced
+  ]
+  \fontsize{22}{28}\selectfont
+}{%
+  \end{tcolorbox}
+}
 
-% AUMENTAR MUCHO el tamaño de fuente
-\setbeamerfont{block title}{size=\LARGE,series=\bfseries}
-\setbeamerfont{block body}{size=\Large}
+% ===============================
+% Tamaños de fuente según guías
+% ===============================
+% Título: 54-72 pt → 60pt
+% Autores: 30-50 pt → 36pt
+% Títulos Secciones: 27-36 pt → 32pt
+% Texto Principal: 18-27 pt → 22pt
+% Leyendas: 14-18 pt → 16pt
 
-% Aumentar tamaño de fuente global del documento
-\setbeamerfont{normal text}{size=\Large}
+\setbeamerfont{block title}{size=\fontsize{32}{38}\selectfont,series=\bfseries}
+\setbeamerfont{block body}{size=\fontsize{22}{28}\selectfont}
+\setbeamerfont{normal text}{size=\fontsize{22}{28}\selectfont}
+\setbeamerfont{caption}{size=\fontsize{16}{20}\selectfont}
 
-% Espaciado entre párrafos dentro de bloques
-\setlength{\parskip}{0.8em}
+% Espaciado entre bloques
+\setlength{\parskip}{0.6em}
+\addtobeamertemplate{block end}{}{\vspace{1.8em}}
 
-% AUMENTAR MUCHO MÁS la separación vertical entre bloques
-\addtobeamertemplate{block end}{}{\vspace{2.5em}}
+% ===============================
+% Separación entre columnas
+% ===============================
+\setlength{\columnsep}{2cm}
 
 % ===============================
 % Metadata
 % ===============================
 \title{Modelado de Alquileres en el AMBA: Enfoque Híbrido e Interpretación de Variables Explicativas}
 \author{Gonzalo Martín Zabaleta Ferrando \and Cipriano Oss Teruel}
-\institute{Universidad de San Andrés (UdeSA) \\
+\institute{Universidad de San Andrés \\
 \texttt{gzabaletaferrando@udesa.edu.ar} \quad \texttt{cossteruel@udesa.edu.ar}}
 \date{}
 
@@ -62,151 +99,208 @@
 \begin{frame}[t]
 
 % ===============================
-% Header
+% Header (sin borde)
 % ===============================
-\begin{block}{}
-\vspace{0.5cm}
-\hspace{0.5cm}
-\begin{minipage}[t]{0.75\textwidth}
-\vspace{1cm}
+\vspace{1.5cm}  % ← MARGEN SUPERIOR
+\hspace{0.5cm}  % ← MARGEN IZQUIERDO
+\begin{minipage}[t]{0.70\textwidth}
+\vspace{0pt}  % ← Fija el punto de alineación
 \raggedright
-{\color{navyblue}\fontsize{48}{58}\selectfont\bfseries \inserttitle \par}
-\vspace{0.4cm}
-{\Large \insertauthor \par}
-\vspace{0.2cm}
-{\Large \insertinstitute \par}
+{\color{navyblue}\fontsize{54}{72}\selectfont\bfseries \inserttitle \par}
 \vspace{0.5cm}
+{\fontsize{36}{44}\selectfont \insertauthor \par}
+\vspace{0.3cm}
+{\fontsize{30}{38}\selectfont \insertinstitute \par}
 \end{minipage}%
 \hfill
 \begin{minipage}[t]{0.18\textwidth}
-\vspace{0.5cm}
+x % ← Fija el punto de alineación
 \raggedleft
-\hspace*{-1cm}
-\includegraphics[width=\textwidth]{udesa-logo.png}
+\includegraphics[width=0.9\textwidth]{udesa-logo.png}
 \end{minipage}
-\vspace{0.5cm}
-\end{block}
+\hspace{1cm}  % ← MARGEN DERECHO
+\vspace{2cm}  % ← ESPACIO ANTES DE LAS COLUMNAS
 
 
 \begin{columns}[t,totalwidth=\textwidth]
 
 % =========================================================
-% Column 1: Problema, Distribución, Efecto espacial
+% COLUMNA 1: MOTIVACIÓN
 % =========================================================
-\begin{column}{0.32\textwidth}
+\begin{column}{0.31\textwidth}
 
-\begin{block}{Problema y Motivación}
+\begin{block}{Motivación}
 \justifying
-El mercado de alquileres en el AMBA exhibe una \textbf{distribución de precios extremadamente sesgada}: un subconjunto muy reducido de propiedades de lujo concentra valores exorbitantes. Estos \emph{outliers} dominan las métricas basadas en la media y distorsionan el aprendizaje de modelos de regresión.
+La tasación automática de precios de alquiler tiene aplicaciones directas: ayuda a inquilinos a detectar ofertas, a propietarios a fijar precios competitivos, y a desarrolladores a evaluar inversiones.
 
-Entrenar un único modelo genera un \textbf{trade--off}: minimizar RMSE prioriza los errores extremos en detrimento del mercado masivo; minimizar MAE mejora el error promedio pero produce grandes errores en viviendas de lujo. Eliminar los outliers simplifica el problema, pero sacrifica capacidad de generalización sobre el segmento premium.
+\vspace{0.3cm}
+Pero el mercado del AMBA presenta \textbf{dos desafíos}:
+
+\begin{itemize}
+  \item \textbf{Distribución sesgada:} el 1.5\% de propiedades de lujo distorsiona el aprendizaje de los modelos.
+  \item \textbf{Tradeoff:} un modelo que predice bien propiedades típicas falla en las de lujo, y viceversa.
+\end{itemize}
+
+\vspace{0.3cm}
+Además de predecir, buscamos \textbf{explicar}: ¿qué características determinan el precio? ¿Cuánto vale una pileta en CABA vs. Zona Oeste? El análisis con SHAP cuantifica el impacto de cada variable.
 \end{block}
 
 \begin{block}{Distribución del Precio}
 \justifying
-La figura muestra la distribución del precio (truncada en el percentil 98.5). La marcada diferencia entre media y mediana evidencia la fuerte asimetría. Esta cola pesada motiva el tratamiento explícito de las propiedades de lujo.
-\vspace{0.15cm}
-\centering
-\includegraphics[width=0.95\linewidth]{plots/eda/03-distribucion-precio-clipped.png}
-\end{block}
 
-\begin{block}{Efecto Espacial y PCA por Ciudad}
-\justifying
-Aunque la correlación lineal entre coordenadas y precio es baja, la variabilidad espacial es evidente: las zonas cercanas al río y el corredor norte concentran los alquileres más altos. El análisis de componentes principales (PCA) coloreado por ciudad muestra gradientes continuos sin clusters netos, reflejando la heterogeneidad del mercado.
-
-\vspace{0.15cm}
-\centering
-\includegraphics[width=0.95\linewidth]{plots/eda/11-geo-plot.png}
-
-\vspace{0.25cm}
-\includegraphics[width=0.95\linewidth]{plots/eda/12-pca-ciudad.png}
-\end{block}
-
-\end{column}
-
-% =========================================================
-% Column 2: Metodología y Modelo Híbrido, Comparación
-% =========================================================
-\begin{column}{0.33\textwidth}
-
-\begin{block}{Metodología}
-\justifying
-Se construyó un \textbf{pipeline integral} de aprendizaje automático que incluye limpieza determinística, ingeniería de features (densidad de ambientes, ratio baños/dormitorios, score de amenities) e imputación adaptada a cada familia de modelos. Se evaluaron múltiples modelos: regresores baseline, \emph{gradient boosting} (XGBoost, LightGBM) y redes neuronales (MLP).
-
-Para comprender el impacto de los outliers se trabajó con tres versiones del dataset: (i) completo, (ii) sin el 1.5\% más caro y (iii) solo el 1.5\% más caro. Este análisis guió el diseño del modelo final.
-\end{block}
-
-\begin{block}{Modelo Híbrido (Normal vs. Lujo)}
-\justifying
-Definimos ``lujo'' como el \textbf{percentil superior 1.5\%} del precio. El modelo híbrido desacopla dos dinámicas:
+La distribución de los precios de las propiedades en el AMBA está extremadamente sesgada.
 \begin{itemize}
-  \item \textbf{Clasificador XGBoost} identifica si la propiedad pertenece al segmento de lujo.
-  \item \textbf{Regresor normal} (XGBRegressor) predice el precio para el 98.5\% de propiedades normales.
-  \item \textbf{Regresor lujo} (XGBRegressor) predice el precio para el 1.5\% de propiedades de lujo.
+  \item \textbf{Mediana:} \$9.166 (precio típico)
+  \item \textbf{Media:} \$27.470 (inflada por outliers)
 \end{itemize}
-Esta arquitectura evita que el conjunto minoritario distorsione el aprendizaje del segmento mayoritario, sin descartar las propiedades caras.
+Esta cola pesada motiva el tratamiento diferenciado del segmento de lujo.
 
 \vspace{0.3cm}
 \centering
-% Diagrama del modelo híbrido
-\begin{tikzpicture}[node distance=12mm, every node/.style={font=\small}]
-\tikzset{
-  box/.style={draw, rounded corners=8pt, align=center, inner sep=4pt, font=\small, minimum width=1.9cm},
-  arrow/.style={-Latex, line width=0.8pt}
-}
-
-% Nodes
-\node[box] (feat) {\textbf{Features}\newline Superficie, amenities, ubicación, tiempo};
-\node[box, below=of feat] (clf) {\textbf{Clasificador}\newline XGBoost};
-\node[box, below left=12mm and 7mm of clf] (regN) {\textbf{Regresor Normal}\newline XGBRegressor};
-\node[box, below right=12mm and 7mm of clf] (regL) {\textbf{Regresor Lujo}\newline XGBRegressor};
-
-% Arrows
-\draw[arrow] (feat) -- (clf);
-\draw[arrow] (clf) -- node[left, font=\scriptsize] {No lujo} (regN);
-\draw[arrow] (clf) -- node[right, font=\scriptsize] {Lujo} (regL);
-\end{tikzpicture}
+\includegraphics[width=1\linewidth]{plots/eda/03-distribucion-precio-clipped.png}
 \end{block}
 
-\begin{block}{Comparación de Modelos}
+\begin{block}{Efecto Espacial No Lineal}
 \justifying
-La figura resume las métricas obtenidas en test. El modelo híbrido alcanza el \textbf{mejor MAE} y \textbf{MedAE}, reduciendo el error típico en el mercado masivo. Un XGBoost único optimizado logra un RMSE ligeramente menor, reflejando un mejor ajuste a los errores extremos. Este contraste confirma el trade--off entre precisión promedio y penalización de extremos.
-\vspace{0.25cm}
+Aunque las coordenadas tienen baja correlación lineal con el precio, el efecto espacial es evidente:
+\begin{itemize}
+  \item Zona norte + cercanía al río = precios altos
+  \item Hexágonos verdes aislados = barrios privados
+  \item Outliers amarillos en zonas promedio = posibles errores
+\end{itemize}
+
+Esta alta no-linealidad de la distribución espacial del precio nos explica por qué los modelos lineales no funcionaron bien en este dataset.
+
+\vspace{0.3cm}
 \centering
-\includegraphics[width=0.95\linewidth]{plots/01-comparacion-final.png}
+\includegraphics[width=1\linewidth]{plots/eda/11-geo-plot.png}
 \end{block}
 
 \end{column}
 
 % =========================================================
-% Column 3: SHAP, Impacto amenities, Conclusión
+% COLUMNA 2: LA SOLUCIÓN
 % =========================================================
-\begin{column}{0.33\textwidth}
+\begin{column}{0.31\textwidth}
 
-\begin{block}{Importancia de Variables (SHAP)}
+\begin{block}{Modelo Híbrido}
 \justifying
-Para interpretar el modelo se emplearon valores SHAP, descomponiendo cada predicción en contribuciones de las features. La \textbf{superficie construida} y las variables de habitabilidad son los principales determinantes del precio, seguidos por la ubicación geográfica. Esta explicación confirma que el modelo captura interacciones no lineales coherentes con la estructura del mercado.
-\vspace{0.25cm}
+Nuestra propuesta: identificar a los outliers primero, y luego predecir su precio con un regresor especializado.
+
+\begin{itemize}
+  \item \textbf{Clasificador XGBoost:} identifica si la propiedad pertenece al 1.5\% más caro.
+  \item \textbf{Regresor Normal:} entrenado en el 98.5\% de propiedades típicas.
+  \item \textbf{Regresor de Lujo:} entrenado exclusivamente en propiedades premium.
+\end{itemize}
+
+Esta arquitectura evita que los outliers distorsionen el aprendizaje del segmento masivo.
+
+\vspace{0.5cm}
 \centering
-\includegraphics[width=0.95\linewidth]{plots/analisis-explicativo/01-feature-importance.png}
+\begin{tikzpicture}[node distance=14mm, every node/.style={font=\normalsize}]
+\tikzset{
+  box/.style={draw, rounded corners=10pt, align=center, inner sep=6pt, font=\normalsize, minimum width=2.2cm, fill=white},
+  arrow/.style={-Latex, line width=1pt}
+}
+
+\node[box] (feat) {\textbf{Features}\\Superficie, amenities,\\ubicación, tiempo};
+\node[box, below=of feat] (clf) {\textbf{Clasificador}\\XGBoost};
+\node[box, below left=14mm and 10mm of clf] (regN) {\textbf{Regresor Normal}\\XGBRegressor};
+\node[box, below right=14mm and 10mm of clf] (regL) {\textbf{Regresor Lujo}\\XGBRegressor};
+
+\draw[arrow] (feat) -- (clf);
+\draw[arrow] (clf) -- node[left, font=\small] {98.5\%} (regN);
+\draw[arrow] (clf) -- node[right, font=\small] {1.5\%} (regL);
+\end{tikzpicture}
+\end{block}
+
+\begin{block}{Resultados}
+\justifying
+El modelo híbrido logra una \textbf{reducción del 74\%} en MAE respecto al baseline:
+
+\vspace{0.3cm}
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Métrica} & \textbf{Híbrido} & \textbf{XGB Opt.} & \textbf{Baseline} \\
+\midrule
+MAE   & \textbf{23,314} & 45,515  & 89,264 \\
+RMSE  & 311,949 & \textbf{294,633} & 364,441 \\
+MedAE & \textbf{934} & 8,360 & 35,022 \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.5cm}
+\includegraphics[width=1\linewidth]{plots/01-comparacion-final.png}
+\end{block}
+
+\begin{block}{El Patrón en los Errores}
+\justifying
+El scatter plot confirma buena precisión general (diagonal), con dos ``nubes'' de casos extremos en los que la predicción del modelo está muy alejada a la realidad.
+
+\vspace{0.3cm}
+\centering
+\includegraphics[width=1\linewidth]{plots/02-predictions-scatter.png}
+\end{block}
+
+\end{column}
+
+% =========================================================
+% COLUMNA 3: INTERPRETACIÓN Y FUTURO
+% =========================================================
+\begin{column}{0.31\textwidth}
+
+\begin{block}{¿Cómo se Explica el Precio?}
+\justifying
+El análisis SHAP revela los principales \emph{drivers} del precio:
+
+\begin{itemize}
+  \item \textbf{Superficie construida:} factor dominante
+  \item \textbf{Baños, cocheras y ambientes:} segundo lugar
+  \item \textbf{Ubicación:} tercer lugar
+  \item \textbf{Gimnasio y pileta:} las amenities más valoradas
+\end{itemize}
+
+\vspace{0.3cm}
+\centering
+\includegraphics[width=1\linewidth]{plots/analisis-explicativo/01-feature-importance.png}
 \end{block}
 
 \begin{block}{Impacto de Amenities por Zona}
 \justifying
-El análisis SHAP por zona revela que las \textbf{amenities premium} (gimnasio, pileta, seguridad) no tienen el mismo valor en todo el AMBA. En Capital Federal y zona norte su efecto sobre el precio es significativamente mayor que en el conurbano sur u oeste, reflejando diferencias socioeconómicas y de oferta inmobiliaria.
-\vspace{0.25cm}
+Las amenities no valen lo mismo en todo el AMBA:
+
+\begin{itemize}
+  \item \textbf{Gimnasio en CABA:} +\$18,000/mes
+  \item \textbf{Gimnasio en Zona Sur:} +\$12,000/mes
+\end{itemize}
+
+\textbf{Insight accionable:} una desarrolladora puede estimar el ROI de construir amenities según la ubicación.
+
+\vspace{0.3cm}
 \centering
-\includegraphics[width=0.95\linewidth]{plots/analisis-explicativo/03-amenities-impact-per-state.png}
+\includegraphics[width=1\linewidth]{plots/analisis-explicativo/03-amenities-impact-per-state.png}
 \end{block}
 
-\begin{block}{Conclusiones y Futuro}
+\begin{block}{Conclusiones y Trabajo Futuro}
 \justifying
-\textbf{Conclusión:} segmentar el mercado y entrenar regresores especializados mejora drásticamente la precisión en el segmento masivo sin desechar las propiedades de lujo. El modelo híbrido es la mejor elección cuando se prioriza el error típico (MAE/MedAE); un XGBoost único optimizado es preferible si el objetivo es reducir el RMSE.
+\textbf{Conclusiones:}
+\begin{itemize}
+  \item Clasificar el mercado mejora la precisión en el segmento masivo sin eliminar outliers.
+  \item El modelo híbrido es óptimo si se prioriza MAE/MedAE; XGBoost lo es si se prioriza RMSE.
+  \item Las características relacionadas con superficie y habitabilidad (baños, ambientes, etc.) son las más importantes en el precio
+\end{itemize}
 
-\textbf{Líneas futuras:} (1) Diseñar un tercer experto para ultra-lujo y detectar anomalías; (2) incorporar datos externos socioeconómicos y de accesibilidad; (3) explorar modelos \emph{mixture-of-experts} entrenados de forma conjunta y calibrar mejor el clasificador.
+\vspace{0.3cm}
+\textbf{Trabajo futuro:}
+\begin{itemize}
+  \item Modelado usando PCA
+  \item Clasificador para las nubes del scatter plot
+  \item Incorporar datos socioeconómicos externos
+  \item Explorar arquitecturas TabNet/Transformers
+\end{itemize}
 
-\vspace{0.25cm}
-\textbf{Repositorio:} \url{https://github.com/gonzabaleta/alquileres}
+\vspace{0.5cm}
 \end{block}
 
 \end{column}
